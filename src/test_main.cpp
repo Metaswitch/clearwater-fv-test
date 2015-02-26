@@ -81,6 +81,12 @@ PrintingTestLogger LOGGER;
 
 int main(int argc, char** argv)
 {
+  // Seed the random number generator. Use the current time, but add on our PID
+  // to defend against multiple instances of the test running at the same time.
+  unsigned int seed = std::time(NULL) + getpid();
+  printf("Running with random seed: %d\n", seed);
+  std::srand(seed);
+
   testing::InitGoogleMock(&argc, argv);
   return RUN_ALL_TESTS();
 }
