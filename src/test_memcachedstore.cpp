@@ -48,54 +48,22 @@
 
 static const SAS::TrailId DUMMY_TRAIL_ID = 0x12345678;
 
-class StringConfigReader : public MemcachedStore::ConfigReader
-{
-public:
-  StringConfigReader(const std::string& cfg) : _cfg(cfg) {}
 
-  bool read(std::string& config)
-  {
-    config = _cfg;
-    return true;
-  }
-
-  std::string source()
-  {
-    char buffer[128];
-    snprintf(buffer, sizeof(buffer), "<In memory config (%p)>", this);
-    return buffer;
-  }
-
-  std::string _cfg;
-};
-
-class TombstoneConfig : public StringConfigReader
-{
-  TombstoneConfig() :
-    StringConfigReader("servers=127.0.0.1:55555\n"
-                       "tombstone_lifetime=300")
-  {}
-};
-
-
-class NoTombstoneConfig : public StringConfigReader
-{
-  NoTombstoneConfig() : StringConfigReader("servers=127.0.0.1:55555") {}
-};
-
-
-// Fixture for memcached test cases.
-class MemcachedFixture : public ::testing::Test
+// Fixture for all memcached tests.
+//
+// This fixture:
+// - Creates a unique key for the test.
+// - Connects to the memcached server using libmemcached, and provides utility
+//   methods for using it.
+class MemcachedTest : public ::testing::Test
 {
   static void SetUpTestCase()
   {
     _next_key = std::rand();
   }
 
-  void SetUp()
+  virtual void SetUp()
   {
-    _store = new MemcachedStore(false, new TombstoneConfig());
-
     // Create a new connection to memcached using libmemcached directly.
     std::string options("--CONNECT-TIMEOUT=10 --SUPPORT-CAS");
     _memcached_client = memcached(options.c_str(), options.length());
@@ -109,13 +77,11 @@ class MemcachedFixture : public ::testing::Test
     _key = std::to_string(_next_key++);
   }
 
-  void TearDown()
+  virtual void TearDown()
   {
-    delete _store; _store = NULL;
     memcached_free(_memcached_client); _memcached_client = NULL;
   }
 
-  MemcachedStore* _store;
   memcached_st* _memcached_client;
 
   // Tests that use this fixture use a monotonically incrementing numerical key
@@ -195,33 +161,108 @@ class MemcachedFixture : public ::testing::Test
   }
 };
 
-unsigned int MemcachedFixture::_next_key;
-const std::string MemcachedFixture::_table = "test_table";
+unsigned int MemcachedTest::_next_key;
+const std::string MemcachedTest::_table = "test_table";
 
 
-TEST_F(MemcachedFixture, SetDeleteSequence)
+// An class to get MemcachedStore's config from an in-memory string.
+class StringConfigReader : public MemcachedStore::ConfigReader
+{
+public:
+  StringConfigReader(const std::string& cfg) : _cfg(cfg) {}
+
+  bool read(std::string& config)
+  {
+    config = _cfg;
+    return true;
+  }
+
+  std::string source()
+  {
+    char buffer[128];
+    snprintf(buffer, sizeof(buffer), "<In memory config (%p)>", this);
+    return buffer;
+  }
+
+  std::string _cfg;
+};
+
+
+// Config reader that configures MemcachedStore to use tombstones.
+class TombstoneConfig : public StringConfigReader
+{
+  TombstoneConfig() :
+    StringConfigReader("servers=127.0.0.1:55555\n"
+                       "tombstone_lifetime=300")
+  {}
+};
+
+
+// Config reader that configures MemcachedStore to NOT use tombstones.
+class NoTombstoneConfig : public StringConfigReader
+{
+  NoTombstoneConfig() : StringConfigReader("servers=127.0.0.1:55555") {}
+};
+
+//
+// Basic MemcachedStore tests.
+//
+
+// Test fixture that creates a single MemcachedStore that with a templated
+// config reader. This allows the basic store tests to be run over several
+// different configs using gtest typed tests (for more details see
+// https://code.google.com/p/googletest/wiki/AdvancedGuide#Typed_Tests).
+template<class T>
+class SingleMemcachedStoreTest : public MemcachedTest
+{
+public:
+  MemcachedStore* _store;
+
+  virtual void SetUp()
+  {
+    MemcachedTest::SetUp();
+    _store = new MemcachedStore(false, new T());
+  }
+
+  virtual void TearDown()
+  {
+    delete _store; _store = NULL;
+    MemcachedTest::TearDown();
+  }
+
+  static void SetUpTestCase()
+  {
+    MemcachedTest::SetUpTestCase();
+  }
+};
+
+typedef ::testing::Types<TombstoneConfig, NoTombstoneConfig> StoreConfigs;
+TYPED_TEST_CASE(SingleMemcachedStoreTest, StoreConfigs);
+
+
+TYPED_TEST(SingleMemcachedStoreTest, SetDeleteSequence)
 {
   Store::Status status;
   const std::string data_in = "kermit";
   std::string data_out;
   uint64_t cas;
 
-  status = _store->set_data(_table, _key, data_in, 0, 300, DUMMY_TRAIL_ID);
+  status = this->_store->set_data(this->_table, this->_key, data_in, 0, 300, DUMMY_TRAIL_ID);
   EXPECT_EQ(status, Store::OK);
 
-  status = _store->get_data(_table, _key, data_out, cas, DUMMY_TRAIL_ID);
+  status = this->_store->get_data(this->_table, this->_key, data_out, cas, DUMMY_TRAIL_ID);
   EXPECT_EQ(status, Store::OK);
   EXPECT_EQ(data_out, data_in);
 
-  status = _store->delete_data(_table, _key, DUMMY_TRAIL_ID);
+  status = this->_store->delete_data(this->_table, this->_key, DUMMY_TRAIL_ID);
   EXPECT_EQ(status, Store::OK);
 
-  status = _store->get_data(_table, _key, data_out, cas, DUMMY_TRAIL_ID);
+  status = this->_store->get_data(this->_table, this->_key, data_out, cas, DUMMY_TRAIL_ID);
   EXPECT_EQ(status, Store::NOT_FOUND);
 }
 
 
-TEST_F(MemcachedFixture, UpdateExistingData)
+TYPED_TEST(SingleMemcachedStoreTest, UpdateExistingData)
 {
   Store::Status status;
   const std::string data_in1 = "kermit";
@@ -229,26 +270,26 @@ TEST_F(MemcachedFixture, UpdateExistingData)
   std::string data_out;
   uint64_t cas;
 
-  status = _store->set_data(_table, _key, data_in1, 0, 300, DUMMY_TRAIL_ID);
+  status = this->_store->set_data(this->_table, this->_key, data_in1, 0, 300, DUMMY_TRAIL_ID);
   EXPECT_EQ(status, Store::OK);
 
-  status = _store->get_data(_table, _key, data_out, cas, DUMMY_TRAIL_ID);
+  status = this->_store->get_data(this->_table, this->_key, data_out, cas, DUMMY_TRAIL_ID);
   EXPECT_EQ(status, Store::OK);
   EXPECT_EQ(data_out, data_in1);
 
-  status = _store->set_data(_table, _key, data_in2, cas, 300, DUMMY_TRAIL_ID);
+  status = this->_store->set_data(this->_table, this->_key, data_in2, cas, 300, DUMMY_TRAIL_ID);
   EXPECT_EQ(status, Store::OK);
 
-  status = _store->get_data(_table, _key, data_out, cas, DUMMY_TRAIL_ID);
+  status = this->_store->get_data(this->_table, this->_key, data_out, cas, DUMMY_TRAIL_ID);
   EXPECT_EQ(status, Store::OK);
   EXPECT_EQ(data_out, data_in2);
 
-  status = _store->delete_data(_table, _key, DUMMY_TRAIL_ID);
+  status = this->_store->delete_data(this->_table, this->_key, DUMMY_TRAIL_ID);
   EXPECT_EQ(status, Store::OK);
 }
 
 
-TEST_F(MemcachedFixture, UpdateWrongCas)
+TYPED_TEST(SingleMemcachedStoreTest, UpdateWrongCas)
 {
   Store::Status status;
   const std::string data_in1 = "kermit";
@@ -256,26 +297,26 @@ TEST_F(MemcachedFixture, UpdateWrongCas)
   std::string data_out;
   uint64_t cas;
 
-  status = _store->set_data(_table, _key, data_in1, 0, 300, DUMMY_TRAIL_ID);
+  status = this->_store->set_data(this->_table, this->_key, data_in1, 0, 300, DUMMY_TRAIL_ID);
   EXPECT_EQ(status, Store::OK);
 
-  status = _store->get_data(_table, _key, data_out, cas, DUMMY_TRAIL_ID);
+  status = this->_store->get_data(this->_table, this->_key, data_out, cas, DUMMY_TRAIL_ID);
   EXPECT_EQ(status, Store::OK);
   EXPECT_EQ(data_out, data_in1);
 
-  status = _store->set_data(_table, _key, data_in2, (cas - 1), 300, DUMMY_TRAIL_ID);
+  status = this->_store->set_data(this->_table, this->_key, data_in2, (cas - 1), 300, DUMMY_TRAIL_ID);
   EXPECT_EQ(status, Store::DATA_CONTENTION);
 
-  status = _store->get_data(_table, _key, data_out, cas, DUMMY_TRAIL_ID);
+  status = this->_store->get_data(this->_table, this->_key, data_out, cas, DUMMY_TRAIL_ID);
   EXPECT_EQ(status, Store::OK);
   EXPECT_EQ(data_out, data_in1);
 
-  status = _store->delete_data(_table, _key, DUMMY_TRAIL_ID);
+  status = this->_store->delete_data(this->_table, this->_key, DUMMY_TRAIL_ID);
   EXPECT_EQ(status, Store::OK);
 }
 
 
-TEST_F(MemcachedFixture, SecondAddFails)
+TYPED_TEST(SingleMemcachedStoreTest, SecondAddFails)
 {
   Store::Status status;
   const std::string data_in1 = "kermit";
@@ -283,26 +324,26 @@ TEST_F(MemcachedFixture, SecondAddFails)
   std::string data_out;
   uint64_t cas;
 
-  status = _store->set_data(_table, _key, data_in1, 0, 300, DUMMY_TRAIL_ID);
+  status = this->_store->set_data(this->_table, this->_key, data_in1, 0, 300, DUMMY_TRAIL_ID);
   EXPECT_EQ(status, Store::OK);
 
-  status = _store->get_data(_table, _key, data_out, cas, DUMMY_TRAIL_ID);
+  status = this->_store->get_data(this->_table, this->_key, data_out, cas, DUMMY_TRAIL_ID);
   EXPECT_EQ(status, Store::OK);
   EXPECT_EQ(data_out, data_in1);
 
-  status = _store->set_data(_table, _key, data_in2, 0, 300, DUMMY_TRAIL_ID);
+  status = this->_store->set_data(this->_table, this->_key, data_in2, 0, 300, DUMMY_TRAIL_ID);
   EXPECT_EQ(status, Store::DATA_CONTENTION);
 
-  status = _store->get_data(_table, _key, data_out, cas, DUMMY_TRAIL_ID);
+  status = this->_store->get_data(this->_table, this->_key, data_out, cas, DUMMY_TRAIL_ID);
   EXPECT_EQ(status, Store::OK);
   EXPECT_EQ(data_out, data_in1);
 
-  status = _store->delete_data(_table, _key, DUMMY_TRAIL_ID);
+  status = this->_store->delete_data(this->_table, this->_key, DUMMY_TRAIL_ID);
   EXPECT_EQ(status, Store::OK);
 }
 
 
-TEST_F(MemcachedFixture, KeyCanBeDeletedThenAdded)
+TYPED_TEST(SingleMemcachedStoreTest, KeyCanBeDeletedThenAdded)
 {
   Store::Status status;
   const std::string data_in1 = "kermit";
@@ -310,25 +351,52 @@ TEST_F(MemcachedFixture, KeyCanBeDeletedThenAdded)
   std::string data_out;
   uint64_t cas;
 
-  status = _store->set_data(_table, _key, data_in1, 0, 300, DUMMY_TRAIL_ID);
+  status = this->_store->set_data(this->_table, this->_key, data_in1, 0, 300, DUMMY_TRAIL_ID);
   EXPECT_EQ(status, Store::OK);
 
-  status = _store->delete_data(_table, _key, DUMMY_TRAIL_ID);
+  status = this->_store->delete_data(this->_table, this->_key, DUMMY_TRAIL_ID);
   EXPECT_EQ(status, Store::OK);
 
-  status = _store->set_data(_table, _key, data_in2, 0, 300, DUMMY_TRAIL_ID);
+  status = this->_store->set_data(this->_table, this->_key, data_in2, 0, 300, DUMMY_TRAIL_ID);
   EXPECT_EQ(status, Store::OK);
 
-  status = _store->get_data(_table, _key, data_out, cas, DUMMY_TRAIL_ID);
+  status = this->_store->get_data(this->_table, this->_key, data_out, cas, DUMMY_TRAIL_ID);
   EXPECT_EQ(status, Store::OK);
   EXPECT_EQ(data_out, data_in2);
 
-  status = _store->delete_data(_table, _key, DUMMY_TRAIL_ID);
+  status = this->_store->delete_data(this->_table, this->_key, DUMMY_TRAIL_ID);
   EXPECT_EQ(status, Store::OK);
 }
 
+//
+// MemcachedStore tests that only apply to when the store uses tombstone
+// records.
+//
 
-TEST_F(MemcachedFixture, TombstonesPreventSimpleAdds)
+class MemcachedStoreTombstoneTest : public MemcachedTest
+{
+public:
+  MemcachedStore* _store;
+
+  virtual void SetUp()
+  {
+    MemcachedTest::SetUp();
+    _store = new MemcachedStore(false, new TombstoneConfig());
+  }
+
+  virtual void TearDown()
+  {
+    delete _store; _store = NULL;
+    MemcachedTest::TearDown();
+  }
+
+  static void SetUpTestCase()
+  {
+    MemcachedTest::SetUpTestCase();
+  }
+};
+
+TEST_F(MemcachedStoreTombstoneTest, TombstonesPreventSimpleAdds)
 {
   Store::Status status;
   memcached_return_t rc;
@@ -349,4 +417,134 @@ TEST_F(MemcachedFixture, TombstonesPreventSimpleAdds)
   rc = simple_get(fqkey(), data_out, cas);
   EXPECT_MEMCACHED_SUCCESS(rc, _memcached_client);
   EXPECT_EQ(data_out, "");
+}
+
+//
+// MemcachedStoreTests that use an uplevel store (on that uses tombstones) and
+// a downlevel store (that does not).
+//
+
+class MemcachedStoreUpgradeTest : public MemcachedTest
+{
+public:
+  MemcachedStore* _uplevel_store;
+  MemcachedStore* _downlevel_store;
+
+  virtual void SetUp()
+  {
+    MemcachedTest::SetUp();
+    _uplevel_store = new MemcachedStore(false, new TombstoneConfig());
+    _downlevel_store = new MemcachedStore(false, new NoTombstoneConfig());
+  }
+
+  virtual void TearDown()
+  {
+    delete _uplevel_store; _uplevel_store = NULL;
+    delete _downlevel_store; _downlevel_store = NULL;
+    MemcachedTest::TearDown();
+  }
+
+  static void SetUpTestCase()
+  {
+    MemcachedTest::SetUpTestCase();
+  }
+};
+
+TEST_F(MemcachedStoreUpgradeTest, UplevelDeletesData)
+{
+  Store::Status status;
+  const std::string data_in1 = "kermit";
+  const std::string data_in2 = "gonzo";
+  std::string data_out;
+  uint64_t cas;
+
+  status = _uplevel_store->set_data(_table, _key, data_in1, 0, 300, DUMMY_TRAIL_ID);
+  EXPECT_EQ(status, Store::OK);
+
+  status = _uplevel_store->delete_data(_table, _key, DUMMY_TRAIL_ID);
+  EXPECT_EQ(status, Store::OK);
+
+  status = _downlevel_store->get_data(_table, _key, data_out, cas, DUMMY_TRAIL_ID);
+  EXPECT_EQ(status, Store::NOT_FOUND);
+
+  status = _downlevel_store->set_data(_table, _key, data_in2, 0, 300, DUMMY_TRAIL_ID);
+  EXPECT_EQ(status, Store::OK);
+
+  status = _downlevel_store->get_data(_table, _key, data_out, cas, DUMMY_TRAIL_ID);
+  EXPECT_EQ(status, Store::OK);
+  EXPECT_EQ(data_out, data_in2);
+
+  status = _downlevel_store->delete_data(_table, _key, DUMMY_TRAIL_ID);
+  EXPECT_EQ(status, Store::OK);
+}
+
+
+TEST_F(MemcachedStoreUpgradeTest, DownlevelDeletesData)
+{
+  Store::Status status;
+  const std::string data_in1 = "kermit";
+  const std::string data_in2 = "gonzo";
+  std::string data_out;
+  uint64_t cas;
+
+  status = _downlevel_store->set_data(_table, _key, data_in1, 0, 300, DUMMY_TRAIL_ID);
+  EXPECT_EQ(status, Store::OK);
+
+  status = _downlevel_store->delete_data(_table, _key, DUMMY_TRAIL_ID);
+  EXPECT_EQ(status, Store::OK);
+
+  status = _uplevel_store->get_data(_table, _key, data_out, cas, DUMMY_TRAIL_ID);
+  EXPECT_EQ(status, Store::NOT_FOUND);
+
+  status = _uplevel_store->set_data(_table, _key, data_in2, 0, 300, DUMMY_TRAIL_ID);
+  EXPECT_EQ(status, Store::OK);
+
+  status = _uplevel_store->get_data(_table, _key, data_out, cas, DUMMY_TRAIL_ID);
+  EXPECT_EQ(status, Store::OK);
+  EXPECT_EQ(data_out, data_in2);
+
+  status = _uplevel_store->delete_data(_table, _key, DUMMY_TRAIL_ID);
+  EXPECT_EQ(status, Store::OK);
+}
+
+// Check that MemcachedStore reloads its config on SIGHUP
+TEST_F(MemcachedTest, ConfigReload)
+{
+  Store::Status status;
+  const std::string data_in1 = "kermit";
+  const std::string data_in2 = "gonzo";
+  std::string data_out;
+
+  StringConfigReader* reader = new StringConfigReader("servers=127.0.0.1:123");
+  MemcachedStore* store = new MemcachedStore(false, reader);
+
+  status = store->set_data(_table, _key, data_in1, 0, 300, DUMMY_TRAIL_ID);
+  EXPECT_EQ(status, Store::ERROR);
+
+  reader->_cfg = "servers=127.0.0.1:55555";
+  // Send outselves SIGHUP. The store will reload its config.
+  kill(getpid(), SIGHUP);
+
+  // We can't tell how long it will take for the store to reload its config.
+  // Try to set some data 5 times, sleeping after each failure to give the store
+  // more time. If none of these work then the test will fail.
+  for (size_t ii = 0; ii < 5; ++ii)
+  {
+    status = store->set_data(_table, _key, data_in1, 0, 300, DUMMY_TRAIL_ID);
+    if (status == Store::OK)
+    {
+      break;
+    }
+    else
+    {
+      sleep(1);
+    }
+  }
+  EXPECT_EQ(status, Store::OK);
+
+  status = store->delete_data(_table, _key, DUMMY_TRAIL_ID);
+  EXPECT_EQ(status, Store::OK);
+
+  reader = NULL;
+  delete store; store = NULL;
 }
