@@ -49,6 +49,12 @@
 static const SAS::TrailId DUMMY_TRAIL_ID = 0x12345678;
 
 
+int memcached_port()
+{
+  return atoi(getenv("MEMCACHED_PORT"));
+}
+
+
 // Fixture for all memcached tests.
 //
 // This fixture:
@@ -70,7 +76,7 @@ class MemcachedTest : public ::testing::Test
     memcached_behavior_set(_memcached_client,
                            MEMCACHED_BEHAVIOR_CONNECT_TIMEOUT,
                            50);
-    memcached_server_add(_memcached_client, "127.0.0.1", 55555);
+    memcached_server_add(_memcached_client, "127.0.0.1", memcached_port());
 
     // Create a new key for every test (to prevent tests from interacting with
     // each other).
@@ -192,7 +198,7 @@ public:
 class TombstoneConfig : public StringConfigReader
 {
   TombstoneConfig() :
-    StringConfigReader("servers=127.0.0.1:55555\n"
+    StringConfigReader("servers=127.0.0.1:" + std::to_string(memcached_port()) + "\n" +
                        "tombstone_lifetime=300")
   {}
 };
@@ -201,7 +207,9 @@ class TombstoneConfig : public StringConfigReader
 // Config reader that configures MemcachedStore to NOT use tombstones.
 class NoTombstoneConfig : public StringConfigReader
 {
-  NoTombstoneConfig() : StringConfigReader("servers=127.0.0.1:55555") {}
+  NoTombstoneConfig() :
+    StringConfigReader("servers=127.0.0.1:" + std::to_string(memcached_port()))
+  {}
 };
 
 //
@@ -521,7 +529,7 @@ TEST_F(MemcachedTest, ConfigReload)
   status = store->set_data(_table, _key, data_in1, 0, 300, DUMMY_TRAIL_ID);
   EXPECT_EQ(status, Store::ERROR);
 
-  reader->_cfg = "servers=127.0.0.1:55555";
+  reader->_cfg = "servers=127.0.0.1:" + std::to_string(memcached_port());
   // Send outselves SIGHUP. The store will reload its config.
   kill(getpid(), SIGHUP);
 

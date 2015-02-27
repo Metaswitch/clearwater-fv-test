@@ -1,0 +1,25 @@
+#!/bin/bash
+# This script sets up the environment for an FV test, then runs the command
+# passed to it. For example `./fvtest ls -ltrh` will run `ls -ltrh` in the
+# fvtest environment.
+
+# Register a cleanup function that terminates memcached when the script exits.
+cleanup()
+{
+  kill -TERM $MEMCACHED_PID
+}
+
+trap cleanup EXIT
+
+# Decide which memcached port to use, and export it so that it is available to
+# any test programs.
+export MEMCACHED_PORT=44444
+
+# Start memcached in the background.
+memcached -p $MEMCACHED_PORT -l "127.0.0.1" &
+MEMCACHED_PID=$!
+echo "Memcached port: $MEMCACHED_PORT"
+echo "Memcached PID:  $MEMCACHED_PID"
+
+# Run the command passed to this script.
+"$@"
