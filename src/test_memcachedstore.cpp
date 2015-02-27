@@ -48,6 +48,42 @@
 
 static const SAS::TrailId DUMMY_TRAIL_ID = 0x12345678;
 
+class StringConfigReader : public MemcachedStore::ConfigReader
+{
+public:
+  StringConfigReader(const std::string& cfg) : _cfg(cfg) {}
+
+  bool read(std::string& config)
+  {
+    config = _cfg;
+    return true;
+  }
+
+  std::string source()
+  {
+    char buffer[128];
+    snprintf(buffer, sizeof(buffer), "<In memory config (%p)>", this);
+    return buffer;
+  }
+
+  std::string _cfg;
+};
+
+class TombstoneConfig : public StringConfigReader
+{
+  TombstoneConfig() :
+    StringConfigReader("servers=127.0.0.1:55555\n"
+                       "tombstone_lifetime=300")
+  {}
+};
+
+
+class NoTombstoneConfig : public StringConfigReader
+{
+  NoTombstoneConfig() : StringConfigReader("servers=127.0.0.1:55555") {}
+};
+
+
 // Fixture for memcached test cases.
 class MemcachedFixture : public ::testing::Test
 {
@@ -58,7 +94,7 @@ class MemcachedFixture : public ::testing::Test
 
   void SetUp()
   {
-    _store = new MemcachedStore(false, "./cluster_settings");
+    _store = new MemcachedStore(false, new TombstoneConfig());
 
     // Create a new connection to memcached using libmemcached directly.
     std::string options("--CONNECT-TIMEOUT=10 --SUPPORT-CAS");
@@ -160,7 +196,7 @@ class MemcachedFixture : public ::testing::Test
 };
 
 unsigned int MemcachedFixture::_next_key;
-std::string MemcachedFixture::_table = "test_table";
+const std::string MemcachedFixture::_table = "test_table";
 
 
 TEST_F(MemcachedFixture, SetDeleteSequence)
