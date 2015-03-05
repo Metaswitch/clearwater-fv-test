@@ -1,4 +1,4 @@
-# Homestead Makefile
+# FV test Makefile
 
 all: stage-build
 
@@ -8,44 +8,7 @@ MK_DIR := ${ROOT}/mk
 GTEST_DIR := $(ROOT)/modules/gmock/gtest
 GMOCK_DIR := $(ROOT)/modules/gmock
 
-#TARGET := ralf
 TARGET_TEST := cpp_common_fvtest
-
-#TARGET_SOURCES := accesslogger.cpp \
-#                  localstore.cpp \
-#                  memcachedstore.cpp \
-#                  memcachedstoreview.cpp \
-#                  signalhandler.cpp \
-#                  sessionstore.cpp \
-#                  session_manager.cpp \
-#                  peer_message_sender.cpp \
-#                  diameterstack.cpp \
-#                  rf.cpp \
-#                  ralf_transaction.cpp \
-#                  message.cpp \
-#                  httpstack.cpp \
-#                  httpstack_utils.cpp \
-#                  handlers.cpp \
-#                  logger.cpp \
-#                  saslogger.cpp \
-#                  httpresolver.cpp \
-#                  httpconnection.cpp \
-#                  chronosconnection.cpp \
-#                  load_monitor.cpp \
-#                  statistic.cpp \
-#                  utils.cpp \
-#                  zmq_lvc.cpp \
-#                  log.cpp \
-#                  baseresolver.cpp \
-#                  diameterresolver.cpp \
-#                  dnscachedresolver.cpp \
-#                  dnsparser.cpp \
-#                  realmmanager.cpp \
-#                  ipv6utils.cpp \
-#                  alarm.cpp \
-#                  communicationmonitor.cpp
-
-#TARGET_SOURCES_BUILD := main.cpp
 
 TARGET_SOURCES_TEST := memcachedstore.cpp \
                        memcachedstoreview.cpp \
@@ -62,10 +25,6 @@ TARGET_EXTRA_OBJS_TEST := gmock-all.o \
                           gtest-all.o
 
 TEST_XML = $(TEST_OUT_DIR)/test_detail_$(TARGET_TEST).xml
-#COVERAGE_XML = $(TEST_OUT_DIR)/coverage_$(TARGET_TEST).xml
-#COVERAGE_LIST_TMP = $(TEST_OUT_DIR)/coverage_list_tmp
-#COVERAGE_LIST = $(TEST_OUT_DIR)/coverage_list
-#COVERAGE_MASTER_LIST = ut/coverage-not-yet
 VG_XML = $(TEST_OUT_DIR)/vg_$(TARGET_TEST).memcheck
 VG_OUT = $(TEST_OUT_DIR)/vg_$(TARGET_TEST).txt
 VG_LIST = $(TEST_OUT_DIR)/vg_$(TARGET_TEST)_list
@@ -90,12 +49,6 @@ CPPFLAGS += -I${ROOT}/include \
 
 # Add cpp-common/src as a VPATH to pull in required production code
 VPATH := ${ROOT}/modules/cpp-common/src
-
-# Production build:
-#
-# Enable optimization in production only.
-#CPPFLAGS := $(filter-out -O2,$(CPPFLAGS))
-#CPPFLAGS_BUILD += -O2
 
 # Test build:
 #
@@ -162,6 +115,20 @@ endif
 
 include ${MK_DIR}/platform.mk
 
+# Override some build targets. These don't need to be real targets, they just
+# have to be non empty (otherwise platform.mk will try to work out the actual
+# values, and try to delete some required directories when cleaning).
+TARGET_BIN := dummy_target_bin
+TARGET_OBJS := dummy_target_objs
+
+# Override the build target to notify the user that there is no production code
+# to build.
+.PHONY: build
+build:
+	@echo 'No production code in this project'
+	@echo 'Run `make test` to build and run the FV tests'
+
+
 .PHONY: stage-build
 stage-build: build
 
@@ -169,11 +136,7 @@ stage-build: build
 test: run_test vg vg-check
 
 # Run the test.  You can set EXTRA_TEST_ARGS to pass extra arguments
-# to the test, e.g.,
-#
-#   make EXTRA_TEST_ARGS=--gtest_filter=StatefulProxyTest* run_test
-#
-# runs just the StatefulProxyTest tests.
+# to the test.
 #
 # Ignore failure here; it will be detected by Jenkins.
 .PHONY: run_test
@@ -181,37 +144,6 @@ run_test: build_test | $(TEST_OUT_DIR)
 	rm -f $(TEST_XML)
 	rm -f $(OBJ_DIR_TEST)/*.gcda
 	./fvtest $(TARGET_BIN_TEST) $(EXTRA_TEST_ARGS) --gtest_output=xml:$(TEST_XML)
-
-#.PHONY: coverage
-#coverage: | $(TEST_OUT_DIR)
-#	$(GCOVR) $(COVERAGEFLAGS) --xml > $(COVERAGE_XML)
-
-# Check that we have 100% coverage of all files except those that we
-# have declared we're being relaxed on.  In particular, all new files
-# must have 100% coverage or be added to $(COVERAGE_MASTER_LIST).
-# The string "Marking build unstable" is recognised by the CI scripts
-# and if it is found the build is marked unstable.
-#.PHONY: coverage-check
-#coverage-check: coverage
-#	@xmllint --xpath '//class[@line-rate!="1.0"]/@filename' $(COVERAGE_XML) \
-#		| tr ' ' '\n' \
-#		| grep filename= \
-#		| cut -d\" -f2 \
-#		| sort > $(COVERAGE_LIST_TMP)
-#	@sort $(COVERAGE_MASTER_LIST) | comm -23 $(COVERAGE_LIST_TMP) - > $(COVERAGE_LIST)
-#	@if grep -q ^ $(COVERAGE_LIST) ; then \
-#		echo "Error: some files unexpectedly have less than 100% code coverage:" ; \
-#		cat $(COVERAGE_LIST) ; \
-#		/bin/false ; \
-#		echo "Marking build unstable." ; \
-#	fi
-
-# Get quick coverage data at the command line. Add --branches to get branch info
-# instead of line info in report.  *.gcov files generated in current directory
-# if you need to see full detail.
-#.PHONY: coverage_raw
-#coverage_raw: | $(TEST_OUT_DIR)
-#	$(GCOVR) $(COVERAGEFLAGS) --keep
 
 .PHONY: debug
 debug: build_test
@@ -249,8 +181,8 @@ vg_raw: build_test | $(TEST_OUT_DIR)
 	-./fvtest valgrind --gen-suppressions=all $(VGFLAGS) \
 	  $(TARGET_BIN_TEST) --gtest_filter='-*DeathTest*' $(EXTRA_TEST_ARGS)
 
-#.PHONY: distclean
-#distclean: clean
+.PHONY: distclean
+distclean: clean
 
 # Build rules for GMock/GTest library.
 $(OBJ_DIR_TEST)/gtest-all.o : $(GTEST_SRCS_)
