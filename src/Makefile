@@ -135,8 +135,10 @@ stage-build: build
 .PHONY: test
 test: run_test vg vg-check
 
-# Run the test.  You can set EXTRA_TEST_ARGS to pass extra arguments
-# to the test.
+# Run the test.  You can set:
+# -  JUSTTEST to specify a filter to pass to gtest.
+# -  EXTRA_TEST_ARGS to pass extra arguments to the test.
+# -  MEMCACHED_PORT to specify what port memcached should use.
 #
 # Ignore failure here; it will be detected by Jenkins.
 .PHONY: run_test

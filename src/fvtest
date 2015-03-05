@@ -6,20 +6,77 @@
 # Register a cleanup function that terminates memcached when the script exits.
 cleanup()
 {
-  kill -TERM $MEMCACHED_PID
+  if [[ $MEMCACHED_PORT != 0 ]]; then
+    kill -TERM $MEMCACHED_PID
+  fi
 }
 
 trap cleanup EXIT
 
-# Decide which memcached port to use, and export it so that it is available to
-# any test programs.
-export MEMCACHED_PORT=44444
 
-# Start memcached in the background.
+# Wait for a server to start accepting TCP connections.
+#
+# @param $1 - The time to wait in ms.
+# @param $2 - The port to wait for.
+#
+# @return   - 0 if the server started successfully, non-0 otherwise.
+wait_for_server()
+{
+  local timeout_ms=$1
+  local port=$2
+
+  local wait_time_ms=0
+  local sleep_time_ms=100
+
+  while [[ $wait_time_ms < $timeout_ms ]]; do
+    if nc -z "127.0.0.1" $port; then
+      break
+    fi
+
+    sleep 0.1; wait_time_ms=$(( $wait_time_ms + 100 ))
+  done
+
+  [[ $wait_time_ms < $timeout_ms ]]
+}
+
+
+# Check if the specified PID exists
+#
+# @param $1 - The PID to check.
+#
+# @return   - 0 if the PID exists, non-0 otherwise.
+pid_exists()
+{
+  ps --pid $1 &>/dev/null
+}
+
+
+#
+# Script starts here.
+#
+
+# Decide which port to use for memcached. Use the default port unless one has
+# been specified in the environment.
+DEFAULT_MEMCACHED_PORT=44444
+export MEMCACHED_PORT=${MEMCACHED_PORT:-$DEFAULT_MEMCACHED_PORT}
+
+# Start memcached in the background and wait for it to come up.
 memcached -p $MEMCACHED_PORT -l "127.0.0.1" &
 MEMCACHED_PID=$!
+
 echo "Memcached port: $MEMCACHED_PORT"
 echo "Memcached PID:  $MEMCACHED_PID"
+
+if ! wait_for_server 5000 $MEMCACHED_PORT; then
+  echo "Timed out waiting for memcached to start"
+  exit 1
+fi
+
+if ! pid_exists $MEMCACHED_PID; then
+  echo "Memcached failed to start"
+  MEMCACHED_PID=0
+  exit 2
+fi
 
 # Run the command passed to this script.
 "$@"
