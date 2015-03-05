@@ -49,6 +49,7 @@ TARGET_TEST := cpp_common_fvtest
 
 TARGET_SOURCES_TEST := memcachedstore.cpp \
                        memcachedstoreview.cpp \
+                       memcached_config.cpp \
                        signalhandler.cpp \
                        log.cpp \
                        logger.cpp \

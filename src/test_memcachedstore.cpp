@@ -171,45 +171,39 @@ unsigned int MemcachedTest::_next_key;
 const std::string MemcachedTest::_table = "test_table";
 
 
-// An class to get MemcachedStore's config from an in-memory string.
-class StringConfigReader : public MemcachedStore::ConfigReader
+// An class to get MemcachedStore's config from an in-memory structure
+class StaticConfigReader : public MemcachedConfigReader
 {
 public:
-  StringConfigReader(const std::string& cfg) : _cfg(cfg) {}
-
-  bool read(std::string& config)
+  bool read_config(MemcachedConfig& config)
   {
     config = _cfg;
     return true;
   }
 
-  std::string source()
-  {
-    char buffer[128];
-    snprintf(buffer, sizeof(buffer), "<In memory config (%p)>", this);
-    return buffer;
-  }
-
-  std::string _cfg;
+  MemcachedConfig _cfg;
 };
 
 
 // Config reader that configures MemcachedStore to use tombstones.
-class TombstoneConfig : public StringConfigReader
+class TombstoneConfig : public StaticConfigReader
 {
-  TombstoneConfig() :
-    StringConfigReader("servers=127.0.0.1:" + std::to_string(memcached_port()) + "\n" +
-                       "tombstone_lifetime=300")
-  {}
+  TombstoneConfig() : StaticConfigReader()
+  {
+    _cfg.servers.push_back("127.0.0.1:" + std::to_string(memcached_port()));
+    _cfg.tombstone_lifetime = 300;
+  }
 };
 
 
 // Config reader that configures MemcachedStore to NOT use tombstones.
-class NoTombstoneConfig : public StringConfigReader
+class NoTombstoneConfig : public StaticConfigReader
 {
-  NoTombstoneConfig() :
-    StringConfigReader("servers=127.0.0.1:" + std::to_string(memcached_port()))
-  {}
+  NoTombstoneConfig() : StaticConfigReader()
+  {
+    _cfg.servers.push_back("127.0.0.1:" + std::to_string(memcached_port()));
+    _cfg.tombstone_lifetime = 0;
+  }
 };
 
 //
@@ -523,14 +517,16 @@ TEST_F(MemcachedTest, ConfigReload)
   const std::string data_in2 = "gonzo";
   std::string data_out;
 
-  StringConfigReader* reader = new StringConfigReader("servers=127.0.0.1:123");
+  StaticConfigReader* reader = new StaticConfigReader();
+  reader->_cfg.servers.push_back("127.0.0.1:123");
+
   MemcachedStore* store = new MemcachedStore(false, reader);
 
   status = store->set_data(_table, _key, data_in1, 0, 300, DUMMY_TRAIL_ID);
   EXPECT_EQ(status, Store::ERROR);
 
-  reader->_cfg = "servers=127.0.0.1:" + std::to_string(memcached_port());
-  // Send outselves SIGHUP. The store will reload its config.
+  reader->_cfg.servers[0] = "127.0.0.1:" + std::to_string(memcached_port());
+  // Send outselves SIGHUP. The store will cause the store to reload its config.
   kill(getpid(), SIGHUP);
 
   // We can't tell how long it will take for the store to reload its config.
