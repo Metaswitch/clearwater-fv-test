@@ -6,7 +6,7 @@
 # Register a cleanup function that terminates memcached when the script exits.
 cleanup()
 {
-  if [[ $MEMCACHED_PORT != 0 ]]; then
+  if [[ $MEMCACHED_PID != 0 ]]; then
     kill -TERM $MEMCACHED_PID
   fi
 }
