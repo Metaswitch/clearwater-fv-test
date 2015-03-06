@@ -65,6 +65,8 @@ variables:
     against. This allows you to override the default value (44444) if needed.
 * `RANDOM_SEED=number`: use a specific random seed. Useful when trying to
     reproduce a test failure.
+* `MEMCACHED_FLAGS=<flags>`: additional options to pass to memcached. For
+    example us `MEMCACHED_FLAGS="-vv" to turn on verbose logging.
 
 ### Advanced Usage
 

@@ -74,7 +74,7 @@ DEFAULT_MEMCACHED_PORT=44444
 export MEMCACHED_PORT=${MEMCACHED_PORT:-$DEFAULT_MEMCACHED_PORT}
 
 # Start memcached in the background and wait for it to come up.
-memcached -p $MEMCACHED_PORT -l "127.0.0.1" &
+memcached -p $MEMCACHED_PORT -l "127.0.0.1" $MEMCACHED_FLAGS &
 MEMCACHED_PID=$!
 
 echo "Memcached port: $MEMCACHED_PORT"
