@@ -73,9 +73,6 @@ LDFLAGS += -lmemcached \
 # Test build uses just-built libraries, which may not be installed
 LDFLAGS_TEST += -Wl,-rpath=$(ROOT)/usr/lib
 
-# Test build also uses libcurl (to verify HttpStack operation)
-LDFLAGS_TEST += -lcurl
-
 # Now the GMock / GTest boilerplate.
 GTEST_HEADERS := $(GTEST_DIR)/include/gtest/*.h \
                  $(GTEST_DIR)/include/gtest/internal/*.h
