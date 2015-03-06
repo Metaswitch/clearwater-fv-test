@@ -8,7 +8,7 @@ MK_DIR := ${ROOT}/mk
 GTEST_DIR := $(ROOT)/modules/gmock/gtest
 GMOCK_DIR := $(ROOT)/modules/gmock
 
-TARGET_TEST := cpp_common_fvtest
+TARGET_TEST := fvtest
 
 TARGET_SOURCES_TEST := memcachedstore.cpp \
                        memcachedstoreview.cpp \
