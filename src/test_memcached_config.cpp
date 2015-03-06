@@ -108,6 +108,15 @@ TEST_F(MemcachedConfigTest, OptionalFieldsEmpty)
 }
 
 
+TEST_F(MemcachedConfigTest, EmptyConfig)
+{
+  write_config("");
+
+  MemcachedConfig config;
+  EXPECT_FALSE(_reader->read_config(config));
+}
+
+
 TEST_F(MemcachedConfigTest, CorruptConfig)
 {
   write_config("servers");
@@ -120,6 +129,15 @@ TEST_F(MemcachedConfigTest, CorruptConfig)
 TEST_F(MemcachedConfigTest, ServerListEmpty)
 {
   write_config("servers=");
+
+  MemcachedConfig config;
+  EXPECT_FALSE(_reader->read_config(config));
+}
+
+
+TEST_F(MemcachedConfigTest, NoServerLine)
+{
+  write_config("tombstone_lifetime=200");
 
   MemcachedConfig config;
   EXPECT_FALSE(_reader->read_config(config));
