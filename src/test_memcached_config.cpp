@@ -44,26 +44,34 @@
 class MemcachedConfigTest : public ::testing::Test
 {
 public:
-  std::string _filename;
+  char _filename[64];
+  int _fd;
+
   MemcachedConfigReader* _reader;
 
   virtual void SetUp()
   {
-    _filename = "./cluster_settings." + std::to_string(getpid());
-    _reader = new MemcachedConfigFileReader(_filename);
+    // Create a temporary file to write the config to.
+    strcpy(_filename, "./cluster_settings.XXXXXX");
+    _fd = mkstemp(_filename);
+    ASSERT_GT(_fd, 0)
+      << "Got error " << _fd << " (" << strerror(errno) << ")";
+
+    _reader = new MemcachedConfigFileReader(std::string(_filename));
   }
 
   virtual void TearDown()
   {
     delete _reader; _reader = NULL;
-    ::unlink(_filename.c_str());
+    close(_fd);
+    unlink(_filename);
   }
 
   void write_config(const std::string cfg)
   {
-    std::ofstream f(_filename);
-    EXPECT_TRUE(f.is_open());
-    f << cfg;
+    size_t num_bytes = ::write(_fd, cfg.c_str(), cfg.length());
+    ASSERT_EQ(num_bytes, cfg.length())
+      << "Got error " << num_bytes << " (" << strerror(errno) << ")";
   }
 };
 
