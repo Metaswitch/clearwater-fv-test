@@ -64,20 +64,11 @@ CPPFLAGS_TEST  += -DUNIT_TEST \
                   -I${ROOT}/modules/cpp-common/test_utils
 
 LDFLAGS += -L${ROOT}/usr/lib
-LDFLAGS += -lzmq \
-           -levent_pthreads \
-           -lmemcached \
-           -levent \
+LDFLAGS += -lmemcached \
            -lsas \
-           -lcurl \
            -lpthread \
-           -lcares \
-           -lboost_regex \
-           -lboost_date_time \
            -lc \
-           -lrt \
-           -lboost_system \
-           -lboost_filesystem
+           -lrt
 
 # Test build uses just-built libraries, which may not be installed
 LDFLAGS_TEST += -Wl,-rpath=$(ROOT)/usr/lib

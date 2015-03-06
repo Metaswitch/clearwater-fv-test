@@ -1,3 +1,4 @@
 # Linux specific build rules
 
-CPPFLAGS += -Wall
+CPPFLAGS += -Wall -Werror
+

@@ -14,29 +14,42 @@ cleanup()
 trap cleanup EXIT
 
 
+# Check if memcached is up an running on the specified port.
+#
+# @param $1 - The port to check.
+#
+# @return   - 0 if memcached is running, non-0 otherwise.
+poll_memcached()
+{
+  local version=$( echo "version" | nc "127.0.0.1" $1 )
+
+  # If all is well nc will have an exit status of 0, and memcached will have
+  # returned a string of the form "VERSION 1.2.3"
+  [[ $? -eq 0 && $version == VERSION* ]]
+}
+
+
 # Wait for a server to start accepting TCP connections.
 #
 # @param $1 - The time to wait in ms.
 # @param $2 - The port to wait for.
 #
 # @return   - 0 if the server started successfully, non-0 otherwise.
-wait_for_server()
+wait_for_memcached()
 {
   local timeout_ms=$1
   local port=$2
-
   local wait_time_ms=0
-  local sleep_time_ms=100
 
-  while [[ $wait_time_ms < $timeout_ms ]]; do
-    if nc -z "127.0.0.1" $port; then
+  while [[ $wait_time_ms -lt $timeout_ms ]]; do
+    if poll_memcached $port; then
       break
     fi
 
     sleep 0.1; wait_time_ms=$(( $wait_time_ms + 100 ))
   done
 
-  [[ $wait_time_ms < $timeout_ms ]]
+  [[ $wait_time_ms -lt $timeout_ms ]]
 }
 
 
@@ -67,7 +80,7 @@ MEMCACHED_PID=$!
 echo "Memcached port: $MEMCACHED_PORT"
 echo "Memcached PID:  $MEMCACHED_PID"
 
-if ! wait_for_server 5000 $MEMCACHED_PORT; then
+if ! wait_for_memcached 5000 $MEMCACHED_PORT; then
   echo "Timed out waiting for memcached to start"
   exit 1
 fi
