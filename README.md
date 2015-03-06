@@ -63,6 +63,8 @@ variables:
   level (e.g. `NOISY=T:5` to control which logs you see.
 * `MEMCACHED_PORT=number`: the tests start up a memcached instance to run
     against. This allows you to override the default value (44444) if needed.
+* `RANDOM_SEED=number`: use a specific random seed. Useful when trying to
+    reproduce a test failure.
 
 ### Advanced Usage
 

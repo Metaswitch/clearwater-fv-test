@@ -417,11 +417,10 @@ TEST_F(MemcachedStoreTombstoneTest, TombstonesPreventSimpleAdds)
 
   rc = simple_get(fqkey(), data_out, cas);
   EXPECT_MEMCACHED_SUCCESS(rc, _memcached_client);
-  EXPECT_EQ(data_out, "");
 }
 
 //
-// MemcachedStoreTests that use an uplevel store (on that uses tombstones) and
+// MemcachedStoreTests that use an uplevel store (one that uses tombstones) and
 // a downlevel store (that does not).
 //
 

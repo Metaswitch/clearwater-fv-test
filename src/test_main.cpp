@@ -81,9 +81,20 @@ PrintingTestLogger LOGGER;
 
 int main(int argc, char** argv)
 {
-  // Seed the random number generator. Use the current time, but add on our PID
-  // to defend against multiple instances of the test running at the same time.
-  unsigned int seed = std::time(NULL) + getpid();
+  // Seed the random number generator. Use the passed in seed if supplied.
+  // Otherwise use the current time, but add on our PID to defend against
+  // multiple instances of the test running at the same time.
+  unsigned int seed;
+  char* seed_str = getenv("RANDOM_SEED");
+
+  if (seed_str != NULL)
+  {
+    seed = atoi(seed_str);
+  }
+  else
+  {
+    seed = std::time(NULL) + getpid();
+  }
   printf("Running with random seed: %d\n", seed);
   std::srand(seed);
 
