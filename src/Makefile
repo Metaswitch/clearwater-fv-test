@@ -20,7 +20,8 @@ TARGET_SOURCES_TEST := memcachedstore.cpp \
                        fakelogger.cpp \
                        test_main.cpp \
                        test_memcachedstore.cpp \
-                       test_memcached_config.cpp
+                       test_memcached_config.cpp \
+                       test_memcachedstoreview.cpp
 
 TARGET_EXTRA_OBJS_TEST := gmock-all.o \
                           gtest-all.o
