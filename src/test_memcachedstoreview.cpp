@@ -46,8 +46,10 @@ using ::testing::Contains;
 //
 // @param - The list to check.
 // @param - The expected length of the list.
-// @param - An AnyOf matcher containing the allowed values for each entry in
-//          the list.
+// @param - A matcher that should match every element of the list.  This will
+//          typically be a std::string (if the caller expects a list
+//          containing a single server) or an AnyOf matcher (listing the
+//          possible replicas).
 template<class M>
 void expect_replica_list(MemcachedStoreView::ReplicaList replicas,
                          size_t count,
@@ -69,10 +71,10 @@ void expect_replica_list(MemcachedStoreView::ReplicaList replicas,
   }
 }
 
-#define EXPECT_REPLICA_LIST(LIST, COUNT, ...)                                  \
+#define EXPECT_REPLICA_LIST(LIST, COUNT, MATCHER)                              \
 {                                                                              \
   SCOPED_TRACE("Checking replica list");                                       \
-  expect_replica_list((LIST), (COUNT), AnyOf(__VA_ARGS__));                    \
+  expect_replica_list((LIST), (COUNT), (MATCHER));                             \
 }
 
 //
@@ -105,8 +107,7 @@ TEST_F(SingleServerTest, OneCurrentReplica)
   std::map<int, MemcachedStoreView::ReplicaList> replicas = _view.current_replicas();
   for (int i = 0; i < NUM_VBUCKETS; ++i)
   {
-    EXPECT_EQ(replicas[i].size(), 1u);
-    EXPECT_EQ(replicas[i][0], "localhost:40001");
+    EXPECT_REPLICA_LIST(replicas[i], 1u, "localhost:40001");
   }
 }
 
@@ -140,7 +141,9 @@ TEST_F(MultiServerTest, TwoCurrentReplicas)
   std::map<int, MemcachedStoreView::ReplicaList> replicas = _view.current_replicas();
   for (int i = 0; i < NUM_VBUCKETS; ++i)
   {
-    EXPECT_REPLICA_LIST(replicas[i], 2u, "localhost:40001", "localhost:40002", "localhost:40003");
+    EXPECT_REPLICA_LIST(replicas[i], 2u, AnyOf("localhost:40001",
+                                               "localhost:40002",
+                                               "localhost:40003"));
   }
 }
 
@@ -177,7 +180,7 @@ TEST_F(ScaleUpTest, CurrentReplicasDontHaveNewServer)
   std::map<int, MemcachedStoreView::ReplicaList> replicas = _view.current_replicas();
   for (int i = 0; i < NUM_VBUCKETS; ++i)
   {
-    EXPECT_REPLICA_LIST(replicas[i], 2u, "localhost:40001", "localhost:40002");
+    EXPECT_REPLICA_LIST(replicas[i], 2u, AnyOf("localhost:40001", "localhost:40002"));
   }
 }
 
@@ -186,7 +189,9 @@ TEST_F(ScaleUpTest, NewReplicasFilledIn)
   std::map<int, MemcachedStoreView::ReplicaList> replicas = _view.new_replicas();
   for (int i = 0; i < NUM_VBUCKETS; ++i)
   {
-    EXPECT_REPLICA_LIST(replicas[i], 2u, "localhost:40001", "localhost:40002", "localhost:40003");
+    EXPECT_REPLICA_LIST(replicas[i], 2u, AnyOf("localhost:40001",
+                                               "localhost:40002",
+                                               "localhost:40003"));
   }
 }
 
