@@ -119,7 +119,7 @@ TEST_F(MemcachedConfigTest, EmptyConfig)
 
 TEST_F(MemcachedConfigTest, CorruptConfig)
 {
-  write_config("servers");
+  write_config("qwerty");
 
   MemcachedConfig config;
   EXPECT_FALSE(_reader->read_config(config));
@@ -128,10 +128,13 @@ TEST_F(MemcachedConfigTest, CorruptConfig)
 
 TEST_F(MemcachedConfigTest, ServerListEmpty)
 {
+  // A blank server list should be valid and parseable - this is so that an empty
+  // remote_cluster_settings file can be put in place, then updated without a
+  // restart when GR config is learnt.
   write_config("servers=");
 
   MemcachedConfig config;
-  EXPECT_FALSE(_reader->read_config(config));
+  EXPECT_TRUE(_reader->read_config(config));
 }
 
 
