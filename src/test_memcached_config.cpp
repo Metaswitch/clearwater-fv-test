@@ -113,7 +113,9 @@ TEST_F(MemcachedConfigTest, EmptyConfig)
   write_config("");
 
   MemcachedConfig config;
-  EXPECT_FALSE(_reader->read_config(config));
+  EXPECT_TRUE(_reader->read_config(config));
+  EXPECT_EQ(config.servers.size(), 0u);
+  EXPECT_EQ(config.new_servers.size(), 0u);
 }
 
 
@@ -143,9 +145,31 @@ TEST_F(MemcachedConfigTest, NoServerLine)
   write_config("tombstone_lifetime=200");
 
   MemcachedConfig config;
-  EXPECT_FALSE(_reader->read_config(config));
+  EXPECT_TRUE(_reader->read_config(config));
+  EXPECT_EQ(config.servers.size(), 0u);
+  EXPECT_EQ(config.new_servers.size(), 0u);
 }
 
+TEST_F(MemcachedConfigTest, OnlyNewServers)
+{
+  write_config("servers=\nnew_servers=a:11211");
+
+  MemcachedConfig config;
+  EXPECT_TRUE(_reader->read_config(config));
+  EXPECT_EQ(config.servers.size(), 0u);
+  EXPECT_EQ(config.new_servers.size(), 1u);
+}
+
+TEST_F(MemcachedConfigTest, BothServerListsEmpty)
+{
+  // A blank server list should be valid and parseable - this is so that an empty
+  // remote_cluster_settings file can be put in place, then updated without a
+  // restart when GR config is learnt.
+  write_config("servers=\nnew_servers=");
+
+  MemcachedConfig config;
+  EXPECT_TRUE(_reader->read_config(config));
+}
 
 TEST_F(MemcachedConfigTest, BadTombstoneLifetime)
 {
