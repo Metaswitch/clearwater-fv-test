@@ -113,9 +113,7 @@ TEST_F(MemcachedConfigTest, EmptyConfig)
   write_config("");
 
   MemcachedConfig config;
-  EXPECT_TRUE(_reader->read_config(config));
-  EXPECT_EQ(config.servers.size(), 0u);
-  EXPECT_EQ(config.new_servers.size(), 0u);
+  EXPECT_FALSE(_reader->read_config(config));
 }
 
 
@@ -145,9 +143,7 @@ TEST_F(MemcachedConfigTest, NoServerLine)
   write_config("tombstone_lifetime=200");
 
   MemcachedConfig config;
-  EXPECT_TRUE(_reader->read_config(config));
-  EXPECT_EQ(config.servers.size(), 0u);
-  EXPECT_EQ(config.new_servers.size(), 0u);
+  EXPECT_FALSE(_reader->read_config(config));
 }
 
 TEST_F(MemcachedConfigTest, OnlyNewServers)
