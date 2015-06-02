@@ -11,7 +11,7 @@ GMOCK_DIR := $(ROOT)/modules/gmock
 TARGET_TEST := fvtest
 
 TARGET_SOURCES_TEST := memcachedstore.cpp \
-	                     utils.cpp \
+                       utils.cpp \
                        memcachedstoreview.cpp \
                        memcached_config.cpp \
                        signalhandler.cpp \
