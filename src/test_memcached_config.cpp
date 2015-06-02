@@ -175,3 +175,24 @@ TEST_F(MemcachedConfigTest, BadTombstoneLifetime)
   MemcachedConfig config;
   EXPECT_FALSE(_reader->read_config(config));
 }
+
+TEST_F(MemcachedConfigTest, Comments)
+{
+  write_config("servers=192.168.0.1:11211\n"
+               "#comment"); 
+
+  MemcachedConfig config;
+  EXPECT_TRUE(_reader->read_config(config));
+}
+
+TEST_F(MemcachedConfigTest, Whitespace)
+{
+  write_config(" # Comment\n"
+               "servers=10.0.0.1:11211, 10.0.0.2:11211");
+
+  MemcachedConfig config;
+  EXPECT_TRUE(_reader->read_config(config));
+  EXPECT_EQ(config.servers.size(), 2u);
+  EXPECT_EQ(config.servers[0], "10.0.0.1:11211");
+  EXPECT_EQ(config.servers[1], "10.0.0.2:11211");
+}

@@ -1,4 +1,4 @@
-# included mk file for homestead
+# included mk file for clearwater-fv-test
 
 FVTEST_DIR := ${ROOT}/src
 FVTEST_TEST_DIR := ${ROOT}/tests
