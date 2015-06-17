@@ -16,7 +16,7 @@ TARGET_SOURCES_TEST := memcachedstore.cpp \
                        memcached_config.cpp \
                        signalhandler.cpp \
                        snmp_table.cpp \
-                       snmp_latency_table.cpp \
+                       snmp_accumulator_table.cpp \
                        log.cpp \
                        logger.cpp \
                        fakelogger.cpp \

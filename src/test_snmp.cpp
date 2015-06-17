@@ -35,9 +35,8 @@
 #include "gtest/gtest.h"
 #include "gmock/gmock.h"
 #include "snmp_includes.h"
-#include "snmp_latency_table.h"
+#include "snmp_accumulator_table.h"
 #include "snmp_scalar.h"
-#include <net-snmp/agent/net-snmp-agent-includes.h>
 
 
 using ::testing::AnyOf;
