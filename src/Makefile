@@ -15,13 +15,16 @@ TARGET_SOURCES_TEST := memcachedstore.cpp \
                        memcachedstoreview.cpp \
                        memcached_config.cpp \
                        signalhandler.cpp \
+                       snmp_table.cpp \
+                       snmp_latency_table.cpp \
                        log.cpp \
                        logger.cpp \
                        fakelogger.cpp \
                        test_main.cpp \
                        test_memcachedstore.cpp \
                        test_memcached_config.cpp \
-                       test_memcachedstoreview.cpp
+                       test_memcachedstoreview.cpp \
+                       test_snmp.cpp
 
 TARGET_EXTRA_OBJS_TEST := gmock-all.o \
                           gtest-all.o
@@ -70,7 +73,10 @@ LDFLAGS += -lmemcached \
            -lsas \
            -lpthread \
            -lc \
-           -lrt
+           -lstdc++ \
+           -lrt \
+           $(shell net-snmp-config --netsnmp-agent-libs)
+
 
 # Test build uses just-built libraries, which may not be installed
 LDFLAGS_TEST += -Wl,-rpath=$(ROOT)/usr/lib
