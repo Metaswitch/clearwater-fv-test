@@ -36,8 +36,10 @@
 #include "gmock/gmock.h"
 #include "snmp_includes.h"
 #include "snmp_accumulator_table.h"
+#include "snmp_counter_table.h"
+#include "snmp_ip_count_table.h"
 #include "snmp_scalar.h"
-
+#include "test_interposer.hpp"
 
 using ::testing::AnyOf;
 using ::testing::Contains;
@@ -116,14 +118,107 @@ TEST_F(SNMPTest, TableOrdering)
   FILE* fd = popen("snmpwalk -v2c -On -c clearwater 127.0.0.1:16161 .1.2.2", "r");
   char buf[1024];
 
-  // Check that they come in the right order - column 2 of row 0, column 2 of row 1, column 3 of row
-  // 0, column 3 of row 1.
+  // Check that they come in the right order - column 2 of row 0, column 2 of row 1, column 2 of row
+  // 3, column 3 of row 0, column 3 of row 1....
   fgets(buf, sizeof(buf), fd);
   ASSERT_STREQ(".1.2.2.1.2.0 = Gauge32: 0\n", buf);
   fgets(buf, sizeof(buf), fd);
   ASSERT_STREQ(".1.2.2.1.2.1 = Gauge32: 0\n", buf);
   fgets(buf, sizeof(buf), fd);
+  ASSERT_STREQ(".1.2.2.1.2.2 = Gauge32: 0\n", buf);
+  fgets(buf, sizeof(buf), fd);
   ASSERT_STREQ(".1.2.2.1.3.0 = Gauge32: 0\n", buf);
   fgets(buf, sizeof(buf), fd);
   ASSERT_STREQ(".1.2.2.1.3.1 = Gauge32: 0\n", buf);
+}
+
+TEST_F(SNMPTest, CounterTimePeriods)
+{
+  sleep(0);
+  cwtest_completely_control_time();
+  // Create a table indexed by time period
+  SNMP::CounterTable tbl("counter", test_oid, OID_LENGTH(test_oid));
+
+  // Shell out to snmpwalk to find all entries in that table
+  FILE* fd = popen("snmpwalk -v2c -On -c clearwater 127.0.0.1:16161 .1.2.2", "r");
+  char buf[1024];
+
+  // At first, all three rows (previous 5s, current 5m, previous 5m) should have a zero value
+  fgets(buf, sizeof(buf), fd);
+  ASSERT_STREQ(".1.2.2.1.2.0 = Gauge32: 0\n", buf);
+  fgets(buf, sizeof(buf), fd);
+  ASSERT_STREQ(".1.2.2.1.2.1 = Gauge32: 0\n", buf);
+  fgets(buf, sizeof(buf), fd);
+  ASSERT_STREQ(".1.2.2.1.2.2 = Gauge32: 0\n", buf);
+
+  // Increment the counter. This should show up in the current-five-minute stats, but nowhere else.
+  tbl.increment();
+
+  fd = popen("snmpwalk -v2c -On -c clearwater 127.0.0.1:16161 .1.2.2", "r");
+  fgets(buf, sizeof(buf), fd);
+  ASSERT_STREQ(".1.2.2.1.2.0 = Gauge32: 0\n", buf);
+  fgets(buf, sizeof(buf), fd);
+  ASSERT_STREQ(".1.2.2.1.2.1 = Gauge32: 1\n", buf); // Current 5 minutes
+  fgets(buf, sizeof(buf), fd);
+  ASSERT_STREQ(".1.2.2.1.2.2 = Gauge32: 0\n", buf);
+
+  // Move on five seconds. The "previous five seconds" stat should now also reflect the increment.
+  cwtest_advance_time_ms(5000);
+
+  fd = popen("snmpwalk -v2c -On -c clearwater 127.0.0.1:16161 .1.2.2", "r");
+  fgets(buf, sizeof(buf), fd);
+  ASSERT_STREQ(".1.2.2.1.2.0 = Gauge32: 1\n", buf);
+  fgets(buf, sizeof(buf), fd);
+  ASSERT_STREQ(".1.2.2.1.2.1 = Gauge32: 1\n", buf); // Current 5 minutes
+  fgets(buf, sizeof(buf), fd);
+  ASSERT_STREQ(".1.2.2.1.2.2 = Gauge32: 0\n", buf);
+
+  // Move on five more seconds. The "previous five seconds" stat should no longer reflect the increment.
+  cwtest_advance_time_ms(5000);
+
+  fd = popen("snmpwalk -v2c -On -c clearwater 127.0.0.1:16161 .1.2.2", "r");
+  fgets(buf, sizeof(buf), fd);
+  ASSERT_STREQ(".1.2.2.1.2.0 = Gauge32: 0\n", buf);
+  fgets(buf, sizeof(buf), fd);
+  ASSERT_STREQ(".1.2.2.1.2.1 = Gauge32: 1\n", buf); // Current 5 minutes
+  fgets(buf, sizeof(buf), fd);
+  ASSERT_STREQ(".1.2.2.1.2.2 = Gauge32: 0\n", buf);
+
+  // Move on five minutes. Only the "previous five minutes" stat should now reflect the increment.
+  cwtest_advance_time_ms(300000);
+
+  fd = popen("snmpwalk -v2c -On -c clearwater 127.0.0.1:16161 .1.2.2", "r");
+  fgets(buf, sizeof(buf), fd);
+  ASSERT_STREQ(".1.2.2.1.2.0 = Gauge32: 0\n", buf);
+  fgets(buf, sizeof(buf), fd);
+  ASSERT_STREQ(".1.2.2.1.2.1 = Gauge32: 0\n", buf); 
+  fgets(buf, sizeof(buf), fd);
+  ASSERT_STREQ(".1.2.2.1.2.2 = Gauge32: 1\n", buf);
+
+  // Increment the counter again and move on ten seconds
+  tbl.increment();
+  cwtest_advance_time_ms(10000);
+
+  // That increment shouldn't be in the "previous 5 seconds" stat (because it was made 10 seconds
+  // ago).
+  fd = popen("snmpwalk -v2c -On -c clearwater 127.0.0.1:16161 .1.2.2", "r");
+  fgets(buf, sizeof(buf), fd);
+  ASSERT_STREQ(".1.2.2.1.2.0 = Gauge32: 0\n", buf);
+
+  cwtest_reset_time();
+}
+
+TEST_F(SNMPTest, IPCountTable)
+{
+  // Create a table
+  SNMP::IPCountTable tbl("ip-counter", test_oid, OID_LENGTH(test_oid));
+
+  tbl.get("127.0.0.1")->increment();
+
+  // Shell out to snmpwalk to find all entries in that table
+  FILE* fd = popen("snmpwalk -v2c -On -c clearwater 127.0.0.1:16161 .1.2.2", "r");
+  char buf[1024];
+
+  fgets(buf, sizeof(buf), fd);
+  ASSERT_STREQ(".1.2.2.1.3.1.4.127.0.0.1 = Gauge32: 1\n", buf);
 }

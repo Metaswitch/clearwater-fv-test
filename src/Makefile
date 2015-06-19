@@ -17,6 +17,7 @@ TARGET_SOURCES_TEST := memcachedstore.cpp \
                        signalhandler.cpp \
                        snmp_table.cpp \
                        snmp_accumulator_table.cpp \
+                       snmp_counter_table.cpp \
                        log.cpp \
                        logger.cpp \
                        fakelogger.cpp \
@@ -27,7 +28,8 @@ TARGET_SOURCES_TEST := memcachedstore.cpp \
                        test_snmp.cpp
 
 TARGET_EXTRA_OBJS_TEST := gmock-all.o \
-                          gtest-all.o
+                          gtest-all.o \
+                          test_interposer.so
 
 TEST_XML = $(TEST_OUT_DIR)/test_detail_$(TARGET_TEST).xml
 VG_XML = $(TEST_OUT_DIR)/vg_$(TARGET_TEST).memcheck
@@ -192,5 +194,5 @@ $(OBJ_DIR_TEST)/gmock-all.o : $(GMOCK_SRCS_)
             -c $(GMOCK_DIR)/src/gmock-all.cc -o $@
 
 # Build rule for our interposer.
-$(OBJ_DIR_TEST)/test_interposer.so: ut/test_interposer.cpp ut/test_interposer.hpp
-	$(CXX) $(CPPFLAGS) -shared -fPIC -ldl $< -o $@
+$(OBJ_DIR_TEST)/test_interposer.so: ${ROOT}/modules/cpp-common/test_utils/test_interposer.cpp ${ROOT}/modules/cpp-common/test_utils/test_interposer.hpp
+	$(CXX) $(CPPFLAGS) -shared -fPIC -ldl -Wl,--whole-archive -Wl,--no-as-needed -lrt -Wl,--no-whole-archive -Wl,--as-needed $< -o $@
