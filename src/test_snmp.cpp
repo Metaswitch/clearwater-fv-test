@@ -61,6 +61,7 @@ class SNMPTest : public ::testing::Test
 {
   SNMPTest() {};
 
+  // Sets up an SNMP master agent on port 16161 for us to register tables with and query
   static void SetUpTestCase()
   {
     // Configure SNMPd to use the fvtest.conf in the local directory
@@ -69,9 +70,6 @@ class SNMPTest : public ::testing::Test
     netsnmp_ds_set_string(NETSNMP_DS_LIBRARY_ID,
                           NETSNMP_DS_LIB_CONFIGURATION_DIR,
                           cwd);
-    netsnmp_ds_set_string(NETSNMP_DS_LIBRARY_ID,
-                          NETSNMP_DS_LIB_MIBDIRS,
-                          "");
 
     // Log SNMPd output to a file
     snmp_enable_filelog("fvtest-snmpd.out", 0);
