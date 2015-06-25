@@ -116,18 +116,18 @@ TEST_F(SNMPTest, TableOrdering)
   FILE* fd = popen("snmpwalk -v2c -On -c clearwater 127.0.0.1:16161 .1.2.2", "r");
   char buf[1024];
 
-  // Check that they come in the right order - column 2 of row 0, column 2 of row 1, column 2 of row
-  // 3, column 3 of row 0, column 3 of row 1....
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.2.0 = Gauge32: 0\n", buf);
+  // Check that they come in the right order - column 2 of row 1, column 2 of row 2, column 2 of row
+  // 3, column 3 of row 1, column 3 of row 2....
   fgets(buf, sizeof(buf), fd);
   ASSERT_STREQ(".1.2.2.1.2.1 = Gauge32: 0\n", buf);
   fgets(buf, sizeof(buf), fd);
   ASSERT_STREQ(".1.2.2.1.2.2 = Gauge32: 0\n", buf);
   fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.3.0 = Gauge32: 0\n", buf);
+  ASSERT_STREQ(".1.2.2.1.2.3 = Gauge32: 0\n", buf);
   fgets(buf, sizeof(buf), fd);
   ASSERT_STREQ(".1.2.2.1.3.1 = Gauge32: 0\n", buf);
+  fgets(buf, sizeof(buf), fd);
+  ASSERT_STREQ(".1.2.2.1.3.2 = Gauge32: 0\n", buf);
 }
 
 TEST_F(SNMPTest, CounterTimePeriods)
@@ -143,55 +143,55 @@ TEST_F(SNMPTest, CounterTimePeriods)
 
   // At first, all three rows (previous 5s, current 5m, previous 5m) should have a zero value
   fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.2.0 = Gauge32: 0\n", buf);
-  fgets(buf, sizeof(buf), fd);
   ASSERT_STREQ(".1.2.2.1.2.1 = Gauge32: 0\n", buf);
   fgets(buf, sizeof(buf), fd);
   ASSERT_STREQ(".1.2.2.1.2.2 = Gauge32: 0\n", buf);
+  fgets(buf, sizeof(buf), fd);
+  ASSERT_STREQ(".1.2.2.1.2.3 = Gauge32: 0\n", buf);
 
   // Increment the counter. This should show up in the current-five-minute stats, but nowhere else.
   tbl.increment();
 
   fd = popen("snmpwalk -v2c -On -c clearwater 127.0.0.1:16161 .1.2.2", "r");
   fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.2.0 = Gauge32: 0\n", buf);
+  ASSERT_STREQ(".1.2.2.1.2.1 = Gauge32: 0\n", buf);
   fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.2.1 = Gauge32: 1\n", buf); // Current 5 minutes
+  ASSERT_STREQ(".1.2.2.1.2.2 = Gauge32: 1\n", buf); // Current 5 minutes
   fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.2.2 = Gauge32: 0\n", buf);
+  ASSERT_STREQ(".1.2.2.1.2.3 = Gauge32: 0\n", buf);
 
   // Move on five seconds. The "previous five seconds" stat should now also reflect the increment.
   cwtest_advance_time_ms(5000);
 
   fd = popen("snmpwalk -v2c -On -c clearwater 127.0.0.1:16161 .1.2.2", "r");
   fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.2.0 = Gauge32: 1\n", buf);
+  ASSERT_STREQ(".1.2.2.1.2.1 = Gauge32: 1\n", buf);
   fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.2.1 = Gauge32: 1\n", buf); // Current 5 minutes
+  ASSERT_STREQ(".1.2.2.1.2.2 = Gauge32: 1\n", buf); // Current 5 minutes
   fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.2.2 = Gauge32: 0\n", buf);
+  ASSERT_STREQ(".1.2.2.1.2.3 = Gauge32: 0\n", buf);
 
   // Move on five more seconds. The "previous five seconds" stat should no longer reflect the increment.
   cwtest_advance_time_ms(5000);
 
   fd = popen("snmpwalk -v2c -On -c clearwater 127.0.0.1:16161 .1.2.2", "r");
   fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.2.0 = Gauge32: 0\n", buf);
+  ASSERT_STREQ(".1.2.2.1.2.1 = Gauge32: 0\n", buf);
   fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.2.1 = Gauge32: 1\n", buf); // Current 5 minutes
+  ASSERT_STREQ(".1.2.2.1.2.2 = Gauge32: 1\n", buf); // Current 5 minutes
   fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.2.2 = Gauge32: 0\n", buf);
+  ASSERT_STREQ(".1.2.2.1.2.3 = Gauge32: 0\n", buf);
 
   // Move on five minutes. Only the "previous five minutes" stat should now reflect the increment.
   cwtest_advance_time_ms(300000);
 
   fd = popen("snmpwalk -v2c -On -c clearwater 127.0.0.1:16161 .1.2.2", "r");
   fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.2.0 = Gauge32: 0\n", buf);
+  ASSERT_STREQ(".1.2.2.1.2.1 = Gauge32: 0\n", buf);
   fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.2.1 = Gauge32: 0\n", buf); 
+  ASSERT_STREQ(".1.2.2.1.2.2 = Gauge32: 0\n", buf); 
   fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.2.2 = Gauge32: 1\n", buf);
+  ASSERT_STREQ(".1.2.2.1.2.3 = Gauge32: 1\n", buf);
 
   // Increment the counter again and move on ten seconds
   tbl.increment();
@@ -201,7 +201,7 @@ TEST_F(SNMPTest, CounterTimePeriods)
   // ago).
   fd = popen("snmpwalk -v2c -On -c clearwater 127.0.0.1:16161 .1.2.2", "r");
   fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.2.0 = Gauge32: 0\n", buf);
+  ASSERT_STREQ(".1.2.2.1.2.1 = Gauge32: 0\n", buf);
 
   cwtest_reset_time();
 }
