@@ -138,10 +138,10 @@ TEST_F(SNMPTest, LatencyCalculations)
   FILE* fd;
   
   // Create a table
-  SNMP::AccumulatorTable tbl("latency", test_oid, OID_LENGTH(test_oid));
+  SNMP::AccumulatorTable* tbl = SNMP::AccumulatorTable::create("latency", test_oid);
 
   // Just put one sample in (which should have a variance of 0).
-  tbl.accumulate(100);
+  tbl->accumulate(100);
 
   // Move on five seconds. The "previous five seconds" stat should now reflect that sample.
   cwtest_advance_time_ms(5000);
@@ -156,8 +156,8 @@ TEST_F(SNMPTest, LatencyCalculations)
   ASSERT_STREQ(".1.2.2.1.3.1 = Gauge32: 0\n", buf);
 
   // Now input two samples in this latency period.
-  tbl.accumulate(300);
-  tbl.accumulate(500);
+  tbl->accumulate(300);
+  tbl->accumulate(500);
 
   // Move on five seconds. The "previous five seconds" stat should now reflect those two samples.
   cwtest_advance_time_ms(5000);
