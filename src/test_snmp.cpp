@@ -44,7 +44,7 @@
 #error "netsnmp includes have polluted the namespace!"
 #endif
 
-#include "snmp_includes.h"
+#include "snmp_internal/snmp_includes.h"
 using ::testing::AnyOf;
 using ::testing::Contains;
 
@@ -186,6 +186,7 @@ TEST_F(SNMPTest, LatencyCalculations)
   ASSERT_STREQ(".1.2.2.1.6.1 = Gauge32: 2\n", buf);
 
   cwtest_reset_time();
+  delete tbl;
 }
 
 TEST_F(SNMPTest, CounterTimePeriods)
