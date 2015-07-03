@@ -136,9 +136,60 @@ TEST_F(SNMPTest, TableOrdering)
   delete tbl;
 }
 
+TEST_F(SNMPTest, LatencyCalculations)
+{
+  cwtest_completely_control_time();
+  
+  char buf[1024];
+  FILE* fd;
+  
+  // Create a table
+  SNMP::AccumulatorTable* tbl = SNMP::AccumulatorTable::create("latency", test_oid);
+
+  // Just put one sample in (which should have a variance of 0).
+  tbl->accumulate(100);
+
+  // Move on five seconds. The "previous five seconds" stat should now reflect that sample.
+  cwtest_advance_time_ms(5000);
+
+  // Average should be 100
+  fd = popen("snmpwalk -v2c -On -c clearwater 127.0.0.1:16161 .1.2.2.1.2.1", "r");
+  fgets(buf, sizeof(buf), fd);
+  ASSERT_STREQ(".1.2.2.1.2.1 = Gauge32: 100\n", buf);
+  // Variance should be 0
+  fd = popen("snmpwalk -v2c -On -c clearwater 127.0.0.1:16161 .1.2.2.1.3.1", "r");
+  fgets(buf, sizeof(buf), fd);
+  ASSERT_STREQ(".1.2.2.1.3.1 = Gauge32: 0\n", buf);
+
+  // Now input two samples in this latency period.
+  tbl->accumulate(300);
+  tbl->accumulate(500);
+
+  // Move on five seconds. The "previous five seconds" stat should now reflect those two samples.
+  cwtest_advance_time_ms(5000);
+
+  // Average should be 400
+  fd = popen("snmpwalk -v2c -On -c clearwater 127.0.0.1:16161 .1.2.2.1.2.1", "r");
+  fgets(buf, sizeof(buf), fd);
+  ASSERT_STREQ(".1.2.2.1.2.1 = Gauge32: 400\n", buf);
+  // HWM should be 500
+  fd = popen("snmpwalk -v2c -On -c clearwater 127.0.0.1:16161 .1.2.2.1.4.1", "r");
+  fgets(buf, sizeof(buf), fd);
+  ASSERT_STREQ(".1.2.2.1.4.1 = Gauge32: 500\n", buf);
+  // LWM should be 300
+  fd = popen("snmpwalk -v2c -On -c clearwater 127.0.0.1:16161 .1.2.2.1.5.1", "r");
+  fgets(buf, sizeof(buf), fd);
+  ASSERT_STREQ(".1.2.2.1.5.1 = Gauge32: 300\n", buf);
+  // Count should be 2
+  fd = popen("snmpwalk -v2c -On -c clearwater 127.0.0.1:16161 .1.2.2.1.6.1", "r");
+  fgets(buf, sizeof(buf), fd);
+  ASSERT_STREQ(".1.2.2.1.6.1 = Gauge32: 2\n", buf);
+
+  cwtest_reset_time();
+}
+
 TEST_F(SNMPTest, CounterTimePeriods)
 {
-  sleep(0);
   cwtest_completely_control_time();
   // Create a table indexed by time period
   SNMP::CounterTable* tbl = SNMP::CounterTable::create("counter", test_oid);
