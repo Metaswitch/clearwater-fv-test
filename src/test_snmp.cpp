@@ -34,13 +34,17 @@
 
 #include "gtest/gtest.h"
 #include "gmock/gmock.h"
-#include "snmp_includes.h"
 #include "snmp_accumulator_table.h"
 #include "snmp_counter_table.h"
 #include "snmp_ip_count_table.h"
 #include "snmp_scalar.h"
 #include "test_interposer.hpp"
 
+#ifdef READ
+#error "netsnmp includes have polluted the namespace!"
+#endif
+
+#include "snmp_includes.h"
 using ::testing::AnyOf;
 using ::testing::Contains;
 
@@ -55,7 +59,7 @@ static void* snmp_thread(void* data)
 
 
 static pthread_t thr;
-static oid test_oid[] = { 1, 2, 2 };
+std::string test_oid = ".1.2.2";
 
 class SNMPTest : public ::testing::Test
 {
@@ -94,7 +98,7 @@ class SNMPTest : public ::testing::Test
 TEST_F(SNMPTest, ScalarValue)
 {
   // Create a scalar
-  SNMP::U32Scalar scalar("answer", test_oid, OID_LENGTH(test_oid));
+  SNMP::U32Scalar scalar("answer", test_oid);
   scalar.value = 42;
 
   // Shell out to snmpget to query that scalar
@@ -110,7 +114,7 @@ TEST_F(SNMPTest, ScalarValue)
 TEST_F(SNMPTest, TableOrdering)
 {
   // Create a table
-  SNMP::AccumulatorTable tbl("latency", test_oid, OID_LENGTH(test_oid));
+  SNMP::AccumulatorTable* tbl = SNMP::AccumulatorTable::create("latency", test_oid);
 
   // Shell out to snmpwalk to find all entries in that table
   FILE* fd = popen("snmpwalk -v2c -On -c clearwater 127.0.0.1:16161 .1.2.2", "r");
@@ -128,6 +132,8 @@ TEST_F(SNMPTest, TableOrdering)
   ASSERT_STREQ(".1.2.2.1.3.1 = Gauge32: 0\n", buf);
   fgets(buf, sizeof(buf), fd);
   ASSERT_STREQ(".1.2.2.1.3.2 = Gauge32: 0\n", buf);
+
+  delete tbl;
 }
 
 TEST_F(SNMPTest, CounterTimePeriods)
@@ -135,7 +141,7 @@ TEST_F(SNMPTest, CounterTimePeriods)
   sleep(0);
   cwtest_completely_control_time();
   // Create a table indexed by time period
-  SNMP::CounterTable tbl("counter", test_oid, OID_LENGTH(test_oid));
+  SNMP::CounterTable* tbl = SNMP::CounterTable::create("counter", test_oid);
 
   // Shell out to snmpwalk to find all entries in that table
   FILE* fd = popen("snmpwalk -v2c -On -c clearwater 127.0.0.1:16161 .1.2.2", "r");
@@ -150,7 +156,7 @@ TEST_F(SNMPTest, CounterTimePeriods)
   ASSERT_STREQ(".1.2.2.1.2.3 = Gauge32: 0\n", buf);
 
   // Increment the counter. This should show up in the current-five-minute stats, but nowhere else.
-  tbl.increment();
+  tbl->increment();
 
   fd = popen("snmpwalk -v2c -On -c clearwater 127.0.0.1:16161 .1.2.2", "r");
   fgets(buf, sizeof(buf), fd);
@@ -194,7 +200,7 @@ TEST_F(SNMPTest, CounterTimePeriods)
   ASSERT_STREQ(".1.2.2.1.2.3 = Gauge32: 1\n", buf);
 
   // Increment the counter again and move on ten seconds
-  tbl.increment();
+  tbl->increment();
   cwtest_advance_time_ms(10000);
 
   // That increment shouldn't be in the "previous 5 seconds" stat (because it was made 10 seconds
@@ -204,14 +210,15 @@ TEST_F(SNMPTest, CounterTimePeriods)
   ASSERT_STREQ(".1.2.2.1.2.1 = Gauge32: 0\n", buf);
 
   cwtest_reset_time();
+  delete tbl;
 }
 
 TEST_F(SNMPTest, IPCountTable)
 {
   // Create a table
-  SNMP::IPCountTable tbl("ip-counter", test_oid, OID_LENGTH(test_oid));
+  SNMP::IPCountTable* tbl = SNMP::IPCountTable::create("ip-counter", test_oid);
 
-  tbl.get("127.0.0.1")->increment();
+  tbl->get("127.0.0.1")->increment();
 
   // Shell out to snmpwalk to find all entries in that table
   FILE* fd = popen("snmpwalk -v2c -On -c clearwater 127.0.0.1:16161 .1.2.2", "r");
@@ -219,4 +226,5 @@ TEST_F(SNMPTest, IPCountTable)
 
   fgets(buf, sizeof(buf), fd);
   ASSERT_STREQ(".1.2.2.1.3.1.4.127.0.0.1 = Gauge32: 1\n", buf);
+  delete tbl;
 }
