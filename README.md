@@ -10,7 +10,7 @@ example).
 The FV tests depend on a number of tools and libraries.  Some of these are
 included as git submodules, but the rest must be installed separately.
 
-On Ubuntu 12.04,
+On Ubuntu 14.04,
 
 1.  update the package list
 
