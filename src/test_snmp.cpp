@@ -40,6 +40,7 @@
 #include "snmp_ip_count_table.h"
 #include "snmp_scalar.h"
 #include "test_interposer.hpp"
+#include "snmp_single_count_by_node_type_table.h"
 
 #ifdef READ
 #error "netsnmp includes have polluted the namespace!"
@@ -318,6 +319,90 @@ TEST_F(SNMPTest, SuccessFailCountTable)
   fd = popen("snmpwalk -v2c -On -c clearwater 127.0.0.1:16161 .1.2.2.1.4.2", "r");
   fgets(buf, sizeof(buf), fd);
   ASSERT_STREQ(".1.2.2.1.4.2 = Gauge32: 1\n", buf);
-  
+
+  delete tbl;
+}
+
+TEST_F(SNMPTest, SingleCountByNodeTypeTable)
+{
+  cwtest_completely_control_time();
+
+  // Create a table
+  SNMP::SingleCountByNodeTypeTable* tbl = SNMP::SingleCountByNodeTypeTable::create("single-count", test_oid);
+
+  // Shell out to snmpwalk to find all entries in that table
+  FILE* fd = popen("snmpwalk -v2c -On -c clearwater 127.0.0.1:16161 .1.2.2", "r");
+  char buf[1024];
+
+  // To start with, all values should be 0.
+  fgets(buf, sizeof(buf), fd);
+  ASSERT_STREQ(".1.2.2.1.3.1.0 = Gauge32: 0\n", buf);
+  fgets(buf, sizeof(buf), fd);
+  ASSERT_STREQ(".1.2.2.1.3.1.2 = Gauge32: 0\n", buf);
+  fgets(buf, sizeof(buf), fd);
+  ASSERT_STREQ(".1.2.2.1.3.1.5 = Gauge32: 0\n", buf);
+  fgets(buf, sizeof(buf), fd);
+  ASSERT_STREQ(".1.2.2.1.3.2.0 = Gauge32: 0\n", buf);
+  fgets(buf, sizeof(buf), fd);
+  ASSERT_STREQ(".1.2.2.1.3.2.2 = Gauge32: 0\n", buf);
+  fgets(buf, sizeof(buf), fd);
+  ASSERT_STREQ(".1.2.2.1.3.2.5 = Gauge32: 0\n", buf);
+  fgets(buf, sizeof(buf), fd);
+  ASSERT_STREQ(".1.2.2.1.3.3.0 = Gauge32: 0\n", buf);
+  fgets(buf, sizeof(buf), fd);
+  ASSERT_STREQ(".1.2.2.1.3.3.2 = Gauge32: 0\n", buf);
+  fgets(buf, sizeof(buf), fd);
+  ASSERT_STREQ(".1.2.2.1.3.3.5 = Gauge32: 0\n", buf);
+
+  // Add an entry for SCSCF/ICSCF/BGCF. Only the current five minutes should have a count.
+  tbl->increment(SNMP::NodeTypes::SCSCF);
+  tbl->increment(SNMP::NodeTypes::ICSCF);
+  tbl->increment(SNMP::NodeTypes::BGCF);
+
+  fd = popen("snmpwalk -v2c -On -c clearwater 127.0.0.1:16161 .1.2.2", "r");
+
+  fgets(buf, sizeof(buf), fd);
+  ASSERT_STREQ(".1.2.2.1.3.1.0 = Gauge32: 0\n", buf);
+  fgets(buf, sizeof(buf), fd);
+  ASSERT_STREQ(".1.2.2.1.3.1.2 = Gauge32: 0\n", buf);
+  fgets(buf, sizeof(buf), fd);
+  ASSERT_STREQ(".1.2.2.1.3.1.5 = Gauge32: 0\n", buf);
+  fgets(buf, sizeof(buf), fd);
+  ASSERT_STREQ(".1.2.2.1.3.2.0 = Gauge32: 1\n", buf);
+  fgets(buf, sizeof(buf), fd);
+  ASSERT_STREQ(".1.2.2.1.3.2.2 = Gauge32: 1\n", buf);
+  fgets(buf, sizeof(buf), fd);
+  ASSERT_STREQ(".1.2.2.1.3.2.5 = Gauge32: 1\n", buf);
+  fgets(buf, sizeof(buf), fd);
+  ASSERT_STREQ(".1.2.2.1.3.3.0 = Gauge32: 0\n", buf);
+  fgets(buf, sizeof(buf), fd);
+  ASSERT_STREQ(".1.2.2.1.3.3.2 = Gauge32: 0\n", buf);
+  fgets(buf, sizeof(buf), fd);
+  ASSERT_STREQ(".1.2.2.1.3.3.5 = Gauge32: 0\n", buf);
+
+  // Move on five seconds. The "previous five seconds" stat should now also reflect the increment.
+  cwtest_advance_time_ms(5000);
+  fd = popen("snmpwalk -v2c -On -c clearwater 127.0.0.1:16161 .1.2.2", "r");
+
+  fgets(buf, sizeof(buf), fd);
+  ASSERT_STREQ(".1.2.2.1.3.1.0 = Gauge32: 1\n", buf);
+  fgets(buf, sizeof(buf), fd);
+  ASSERT_STREQ(".1.2.2.1.3.1.2 = Gauge32: 1\n", buf);
+  fgets(buf, sizeof(buf), fd);
+  ASSERT_STREQ(".1.2.2.1.3.1.5 = Gauge32: 1\n", buf);
+  fgets(buf, sizeof(buf), fd);
+  ASSERT_STREQ(".1.2.2.1.3.2.0 = Gauge32: 1\n", buf);
+  fgets(buf, sizeof(buf), fd);
+  ASSERT_STREQ(".1.2.2.1.3.2.2 = Gauge32: 1\n", buf);
+  fgets(buf, sizeof(buf), fd);
+  ASSERT_STREQ(".1.2.2.1.3.2.5 = Gauge32: 1\n", buf);
+  fgets(buf, sizeof(buf), fd);
+  ASSERT_STREQ(".1.2.2.1.3.3.0 = Gauge32: 0\n", buf);
+  fgets(buf, sizeof(buf), fd);
+  ASSERT_STREQ(".1.2.2.1.3.3.2 = Gauge32: 0\n", buf);
+  fgets(buf, sizeof(buf), fd);
+  ASSERT_STREQ(".1.2.2.1.3.3.5 = Gauge32: 0\n", buf);
+
+  cwtest_reset_time();
   delete tbl;
 }
