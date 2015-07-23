@@ -294,22 +294,9 @@ TEST_F(SNMPTest, SuccessFailCountTable)
   
   tbl->increment_attempts();
   tbl->increment_successes();
-  
-  // Should be 1 attempt, 1 success, 0 failures.
-  fd = popen("snmpwalk -v2c -On -c clearwater 127.0.0.1:16161 .1.2.2.1.2.2", "r");
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.2.2 = Gauge32: 1\n", buf);
-  fd = popen("snmpwalk -v2c -On -c clearwater 127.0.0.1:16161 .1.2.2.1.3.2", "r");
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.3.2 = Gauge32: 1\n", buf);
-  fd = popen("snmpwalk -v2c -On -c clearwater 127.0.0.1:16161 .1.2.2.1.4.2", "r");
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.4.2 = Gauge32: 0\n", buf);
-
   tbl->increment_attempts();
-  tbl->increment_failures();
-  
-  // Should be 2 attempts, 1 success, 1 failure.
+  tbl->increment_failures(); 
+  // Should be 2 attempt, 1 success, 1 failures.
   fd = popen("snmpwalk -v2c -On -c clearwater 127.0.0.1:16161 .1.2.2.1.2.2", "r");
   fgets(buf, sizeof(buf), fd);
   ASSERT_STREQ(".1.2.2.1.2.2 = Gauge32: 2\n", buf);
@@ -319,6 +306,19 @@ TEST_F(SNMPTest, SuccessFailCountTable)
   fd = popen("snmpwalk -v2c -On -c clearwater 127.0.0.1:16161 .1.2.2.1.4.2", "r");
   fgets(buf, sizeof(buf), fd);
   ASSERT_STREQ(".1.2.2.1.4.2 = Gauge32: 1\n", buf);
+
+  // Move on five seconds. The "previous five seconds" stat should now also reflect the increment.
+  cwtest_advance_time_ms(5000);
+  
+  fd = popen("snmpwalk -v2c -On -c clearwater 127.0.0.1:16161 .1.2.2.1.2.1", "r");
+  fgets(buf, sizeof(buf), fd);
+  ASSERT_STREQ(".1.2.2.1.2.1 = Gauge32: 2\n", buf);
+  fd = popen("snmpwalk -v2c -On -c clearwater 127.0.0.1:16161 .1.2.2.1.3.1", "r");
+  fgets(buf, sizeof(buf), fd);
+  ASSERT_STREQ(".1.2.2.1.3.1 = Gauge32: 1\n", buf);
+  fd = popen("snmpwalk -v2c -On -c clearwater 127.0.0.1:16161 .1.2.2.1.4.1", "r");
+  fgets(buf, sizeof(buf), fd);
+  ASSERT_STREQ(".1.2.2.1.4.1 = Gauge32: 1\n", buf);
 
   delete tbl;
 }

@@ -18,7 +18,7 @@ TARGET_SOURCES_TEST := memcachedstore.cpp \
                        snmp_row.cpp \
                        snmp_accumulator_table.cpp \
                        snmp_counter_table.cpp \
-					   snmp_success_fail_count_table.cpp \
+                       snmp_success_fail_count_table.cpp \
                        snmp_ip_count_table.cpp \
                        snmp_single_count_by_node_type_table.cpp \
                        snmp_scalar.cpp \
