@@ -36,6 +36,7 @@
 #include "gmock/gmock.h"
 #include "snmp_accumulator_table.h"
 #include "snmp_counter_table.h"
+#include "snmp_success_fail_count_table.h"
 #include "snmp_ip_count_table.h"
 #include "snmp_scalar.h"
 #include "test_interposer.hpp"
@@ -278,5 +279,45 @@ TEST_F(SNMPTest, IPCountTable)
 
   fgets(buf, sizeof(buf), fd);
   ASSERT_STREQ(".1.2.2.1.3.1.4.127.0.0.1 = Gauge32: 1\n", buf);
+  delete tbl;
+}
+
+TEST_F(SNMPTest, SuccessFailCountTable)
+{
+  // Create table
+  SNMP::SuccessFailCountTable* tbl = SNMP::SuccessFailCountTable::create("success_fail_count", test_oid);
+  
+  // Shell out to snmpwalk to find all entries in that table
+  FILE* fd;
+  char buf[1024];
+  
+  tbl->increment_attempts();
+  tbl->increment_successes();
+  
+  // Should be 1 attempt, 1 success, 0 failures.
+  fd = popen("snmpwalk -v2c -On -c clearwater 127.0.0.1:16161 .1.2.2.1.2.2", "r");
+  fgets(buf, sizeof(buf), fd);
+  ASSERT_STREQ(".1.2.2.1.2.2 = Gauge32: 1\n", buf);
+  fd = popen("snmpwalk -v2c -On -c clearwater 127.0.0.1:16161 .1.2.2.1.3.2", "r");
+  fgets(buf, sizeof(buf), fd);
+  ASSERT_STREQ(".1.2.2.1.3.2 = Gauge32: 1\n", buf);
+  fd = popen("snmpwalk -v2c -On -c clearwater 127.0.0.1:16161 .1.2.2.1.4.2", "r");
+  fgets(buf, sizeof(buf), fd);
+  ASSERT_STREQ(".1.2.2.1.4.2 = Gauge32: 0\n", buf);
+
+  tbl->increment_attempts();
+  tbl->increment_failures();
+  
+  // Should be 2 attempts, 1 success, 1 failure.
+  fd = popen("snmpwalk -v2c -On -c clearwater 127.0.0.1:16161 .1.2.2.1.2.2", "r");
+  fgets(buf, sizeof(buf), fd);
+  ASSERT_STREQ(".1.2.2.1.2.2 = Gauge32: 2\n", buf);
+  fd = popen("snmpwalk -v2c -On -c clearwater 127.0.0.1:16161 .1.2.2.1.3.2", "r");
+  fgets(buf, sizeof(buf), fd);
+  ASSERT_STREQ(".1.2.2.1.3.2 = Gauge32: 1\n", buf);
+  fd = popen("snmpwalk -v2c -On -c clearwater 127.0.0.1:16161 .1.2.2.1.4.2", "r");
+  fgets(buf, sizeof(buf), fd);
+  ASSERT_STREQ(".1.2.2.1.4.2 = Gauge32: 1\n", buf);
+  
   delete tbl;
 }
