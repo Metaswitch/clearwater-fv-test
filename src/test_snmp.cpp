@@ -417,7 +417,7 @@ TEST_F(SNMPTest, SuccessFailCountByRequestTypeTable)
   FILE* fd;
   char buf[1024];
 
-  // To start with, all values should be 0.
+  // To start with, all values should be 0 (check the INVITE and ACK entries).
   // Shell out to snmpwalk to find previous 5 second period attempts.
   fd = popen("snmpwalk -v2c -On -c clearwater 127.0.0.1:16161 .1.2.2.1.3.1", "r");
   fgets(buf, sizeof(buf), fd);
@@ -481,7 +481,7 @@ TEST_F(SNMPTest, SuccessFailCountByRequestTypeTable)
   fgets(buf, sizeof(buf), fd);
   ASSERT_STREQ(".1.2.2.1.5.3.1 = Gauge32: 0\n", buf);
  
-  // Increment an attempt and success for INVITE, and an attempt and failure for BYE. Only the current five minutes should have a count.
+  // Increment an attempt and success for INVITE, and an attempt and failure for ACK. Only the current five minutes should have a count.
   tbl->increment_attempts(SNMP::SIPRequestTypes::INVITE);
   tbl->increment_successes(SNMP::SIPRequestTypes::INVITE);
   tbl->increment_attempts(SNMP::SIPRequestTypes::ACK);
