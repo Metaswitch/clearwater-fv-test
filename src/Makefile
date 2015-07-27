@@ -26,10 +26,13 @@ TARGET_SOURCES_TEST := memcachedstore.cpp \
                        log.cpp \
                        logger.cpp \
                        fakelogger.cpp \
+                       dnscachedresolver.cpp \
+                       dnsparser.cpp \
                        test_main.cpp \
                        test_memcachedstore.cpp \
                        test_memcached_config.cpp \
                        test_memcachedstoreview.cpp \
+                       test_dns.cpp \
                        test_snmp.cpp
 
 TARGET_EXTRA_OBJS_TEST := gmock-all.o \
@@ -82,6 +85,7 @@ LDFLAGS += -lmemcached \
            -lc \
            -lstdc++ \
            -lrt \
+           -lcares \
            $(shell net-snmp-config --netsnmp-agent-libs)
 
 
