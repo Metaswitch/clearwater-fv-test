@@ -35,7 +35,7 @@ This accesses the repository over SSH on Github, and will not work unless you ha
 The easiest way to run the tests is to run `make test` from the root of the
 repository. This will build all necessary dependencies and run the test suite.
 
-Ralf unit tests use the [Google Test](https://code.google.com/p/googletest/)
+clearwater-fv-test uses the [Google Test](https://code.google.com/p/googletest/)
 framework, so the output from the test run looks something like this.
 
     Memcached port: 44444
