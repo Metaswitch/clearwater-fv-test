@@ -329,7 +329,7 @@ TEST_F(SNMPTest, SingleCountByNodeTypeTable)
   cwtest_completely_control_time();
 
   // Create a table
-  SNMP::SingleCountByNodeTypeTable* tbl = SNMP::SingleCountByNodeTypeTable::create("single-count", test_oid);
+  SNMP::SingleCountByNodeTypeTable* tbl = SNMP::SingleCountByNodeTypeTable::create("single-count", test_oid, {SNMP::NodeTypes::SCSCF, SNMP::NodeTypes::ICSCF});
 
   // Shell out to snmpwalk to find all entries in that table
   FILE* fd = popen("snmpwalk -v2c -On -c clearwater 127.0.0.1:16161 .1.2.2", "r");
@@ -339,87 +339,35 @@ TEST_F(SNMPTest, SingleCountByNodeTypeTable)
   fgets(buf, sizeof(buf), fd);
   ASSERT_STREQ(".1.2.2.1.3.1.0 = Gauge32: 0\n", buf);
   fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.3.1.1 = Gauge32: 0\n", buf);
-  fgets(buf, sizeof(buf), fd);
   ASSERT_STREQ(".1.2.2.1.3.1.2 = Gauge32: 0\n", buf);
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.3.1.5 = Gauge32: 0\n", buf);
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.3.1.7 = Gauge32: 0\n", buf);
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.3.1.11 = Gauge32: 0\n", buf);
   fgets(buf, sizeof(buf), fd);
   ASSERT_STREQ(".1.2.2.1.3.2.0 = Gauge32: 0\n", buf);
   fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.3.2.1 = Gauge32: 0\n", buf);
-  fgets(buf, sizeof(buf), fd);
   ASSERT_STREQ(".1.2.2.1.3.2.2 = Gauge32: 0\n", buf);
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.3.2.5 = Gauge32: 0\n", buf);
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.3.2.7 = Gauge32: 0\n", buf);
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.3.2.11 = Gauge32: 0\n", buf);
   fgets(buf, sizeof(buf), fd);
   ASSERT_STREQ(".1.2.2.1.3.3.0 = Gauge32: 0\n", buf);
   fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.3.3.1 = Gauge32: 0\n", buf);
-  fgets(buf, sizeof(buf), fd);
   ASSERT_STREQ(".1.2.2.1.3.3.2 = Gauge32: 0\n", buf);
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.3.3.5 = Gauge32: 0\n", buf);
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.3.3.7 = Gauge32: 0\n", buf);
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.3.3.11 = Gauge32: 0\n", buf);
 
   // Add an entry for each supported node type. Only the current five minutes
   // should have a count.
   tbl->increment(SNMP::NodeTypes::SCSCF);
-  tbl->increment(SNMP::NodeTypes::PCSCF);
   tbl->increment(SNMP::NodeTypes::ICSCF);
-  tbl->increment(SNMP::NodeTypes::BGCF);
-  tbl->increment(SNMP::NodeTypes::IBCF);
-  tbl->increment(SNMP::NodeTypes::ECSCF);
 
   fd = popen("snmpwalk -v2c -On -c clearwater 127.0.0.1:16161 .1.2.2", "r");
 
   fgets(buf, sizeof(buf), fd);
   ASSERT_STREQ(".1.2.2.1.3.1.0 = Gauge32: 0\n", buf);
   fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.3.1.1 = Gauge32: 0\n", buf);
-  fgets(buf, sizeof(buf), fd);
   ASSERT_STREQ(".1.2.2.1.3.1.2 = Gauge32: 0\n", buf);
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.3.1.5 = Gauge32: 0\n", buf);
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.3.1.7 = Gauge32: 0\n", buf);
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.3.1.11 = Gauge32: 0\n", buf);
   fgets(buf, sizeof(buf), fd);
   ASSERT_STREQ(".1.2.2.1.3.2.0 = Gauge32: 1\n", buf);
   fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.3.2.1 = Gauge32: 1\n", buf);
-  fgets(buf, sizeof(buf), fd);
   ASSERT_STREQ(".1.2.2.1.3.2.2 = Gauge32: 1\n", buf);
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.3.2.5 = Gauge32: 1\n", buf);
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.3.2.7 = Gauge32: 1\n", buf);
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.3.2.11 = Gauge32: 1\n", buf);
   fgets(buf, sizeof(buf), fd);
   ASSERT_STREQ(".1.2.2.1.3.3.0 = Gauge32: 0\n", buf);
   fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.3.3.1 = Gauge32: 0\n", buf);
-  fgets(buf, sizeof(buf), fd);
   ASSERT_STREQ(".1.2.2.1.3.3.2 = Gauge32: 0\n", buf);
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.3.3.5 = Gauge32: 0\n", buf);
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.3.3.7 = Gauge32: 0\n", buf);
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.3.3.11 = Gauge32: 0\n", buf);
 
   // Move on five seconds. The "previous five seconds" stat should now also reflect the increment.
   cwtest_advance_time_ms(5000);
@@ -428,39 +376,15 @@ TEST_F(SNMPTest, SingleCountByNodeTypeTable)
   fgets(buf, sizeof(buf), fd);
   ASSERT_STREQ(".1.2.2.1.3.1.0 = Gauge32: 1\n", buf);
   fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.3.1.1 = Gauge32: 1\n", buf);
-  fgets(buf, sizeof(buf), fd);
   ASSERT_STREQ(".1.2.2.1.3.1.2 = Gauge32: 1\n", buf);
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.3.1.5 = Gauge32: 1\n", buf);
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.3.1.7 = Gauge32: 1\n", buf);
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.3.1.11 = Gauge32: 1\n", buf);
   fgets(buf, sizeof(buf), fd);
   ASSERT_STREQ(".1.2.2.1.3.2.0 = Gauge32: 1\n", buf);
   fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.3.2.1 = Gauge32: 1\n", buf);
-  fgets(buf, sizeof(buf), fd);
   ASSERT_STREQ(".1.2.2.1.3.2.2 = Gauge32: 1\n", buf);
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.3.2.5 = Gauge32: 1\n", buf);
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.3.2.7 = Gauge32: 1\n", buf);
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.3.2.11 = Gauge32: 1\n", buf);
   fgets(buf, sizeof(buf), fd);
   ASSERT_STREQ(".1.2.2.1.3.3.0 = Gauge32: 0\n", buf);
   fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.3.3.1 = Gauge32: 0\n", buf);
-  fgets(buf, sizeof(buf), fd);
   ASSERT_STREQ(".1.2.2.1.3.3.2 = Gauge32: 0\n", buf);
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.3.3.5 = Gauge32: 0\n", buf);
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.3.3.7 = Gauge32: 0\n", buf);
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.3.3.11 = Gauge32: 0\n", buf);
 
   cwtest_reset_time();
   delete tbl;
