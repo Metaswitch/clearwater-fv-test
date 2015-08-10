@@ -572,29 +572,45 @@ TEST_F(SNMPTest, ContinuousAccumulatorTable)
   FILE* fd = popen("snmpwalk -v2c -On -c clearwater 127.0.0.1:16161 .1.2.2.1.2.2", "r");
   char buf[1024];
   fgets(buf, sizeof(buf), fd);
-  //ASSERT_STREQ(".1.2.2.1.2.2 = Gauge32: 200\n", buf); // Current 5 minutes
+  ASSERT_STREQ(".1.2.2.1.2.2 = Gauge32: 200\n", buf); // Current 5 minutes
 
   // Add another value to the table and advance 89 seconds
   tbl->accumulate(100);
   cwtest_advance_time_ms(89000);
 
   // This period has spent half the time at 200, and half at 100
+  // So average value should be 150
   fd = popen("snmpwalk -v2c -On -c clearwater 127.0.0.1:16161 .1.2.2.1.2.2", "r");
   fgets(buf, sizeof(buf), fd);
-  //ASSERT_STREQ(".1.2.2.1.2.2 = Gauge32: 150\n", buf); // Current 5 minutes
+  ASSERT_STREQ(".1.2.2.1.2.2 = Gauge32: 150\n", buf); // Current 5 minutes
 
   // Jump forward to the next 5 minutes (half way through it)
   cwtest_advance_time_ms(150000);
 
   // The average value should be 100 for the current 5 minutes as it is carried
-  // over
+  // over, additionally, should be value for HWM and LWM, and variance 0
   fd = popen("snmpwalk -v2c -On -c clearwater 127.0.0.1:16161 .1.2.2.1.2.2", "r");
-  fgets(buf, sizeof(buf), fd);
+  fgets(buf, sizeof(buf), fd); // Average
   ASSERT_STREQ(".1.2.2.1.2.2 = Gauge32: 100\n", buf); // Current 5 minutes
 
+  fd = popen("snmpwalk -v2c -On -c clearwater 127.0.0.1:16161 .1.2.2.1.3.2", "r");
+  fgets(buf, sizeof(buf), fd); // Variance
+  ASSERT_STREQ(".1.2.2.1.3.2 = Gauge32: 0\n", buf); // Current 5 minutes
+
+  fd = popen("snmpwalk -v2c -On -c clearwater 127.0.0.1:16161 .1.2.2.1.4.2", "r");
+  fgets(buf, sizeof(buf), fd); // HWM
+  ASSERT_STREQ(".1.2.2.1.4.2 = Gauge32: 100\n", buf); // Current 5 minutes
+
+  fd = popen("snmpwalk -v2c -On -c clearwater 127.0.0.1:16161 .1.2.2.1.5.2", "r");
+  fgets(buf, sizeof(buf), fd); // LWM
+  ASSERT_STREQ(".1.2.2.1.5.2 = Gauge32: 100\n", buf); // Current 5 minutes
+
   // The previous 5 minutes should not have changed value
-  fd = popen("snmpwalk -v2c -On -c clearwater 127.0.0.1:16161 .1.2.2.1.2.2", "r");
+  fd = popen("snmpwalk -v2c -On -c clearwater 127.0.0.1:16161 .1.2.2.1.2.3", "r");
   fgets(buf, sizeof(buf), fd);
-  //ASSERT_STREQ(".1.2.2.1.2.3 = Gauge32: 150\n", buf); // Current 5 minutes
+  ASSERT_STREQ(".1.2.2.1.2.3 = Gauge32: 150\n", buf); // Current 5 minutes
+
+  cwtest_reset_time();
+  delete tbl;
 
 }
