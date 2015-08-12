@@ -541,12 +541,16 @@ TEST_F(SNMPTest, SuccessFailCountByRequestTypeTable)
 }
 
 // Advance to the next start of interval - accurate to within the first
-// second.
+// second. i.e. May jump to 12:00:00:634, but never before 12:00:00:000
 void jump_to_next_periodstart(uint32_t interval_ms)
 {
   struct timespec now;
   clock_gettime(CLOCK_REALTIME_COARSE, &now);
+
+  // Calculate the current time in ms
   uint64_t ms_since_epoch = (now.tv_sec * 1000) + (now.tv_nsec / 1000000);
+
+  // Move time forward
   cwtest_advance_time_ms(interval_ms - (ms_since_epoch % interval_ms));
 }
 
@@ -557,26 +561,26 @@ TEST_F(SNMPTest, ContinuousAccumulatorTable)
   // Consider a 5 minute period
   jump_to_next_periodstart(300000);
 
-  // Advance to 2m into the period
-  cwtest_advance_time_ms(120000);
+  // Advance to 59s into the period
+  cwtest_advance_time_ms(59000);
 
   // Create table at this point
   SNMP::ContinuousAccumulatorTable* tbl = SNMP::ContinuousAccumulatorTable::create("continuous", test_oid);
 
-  // Add one value to the table and advance 90 seconds
-  tbl->accumulate(200);
-  cwtest_advance_time_ms(90000);
+  // Add one value to the table and advance 120 seconds
+  tbl->accumulate(100);
+  cwtest_advance_time_ms(120000);
 
   // Average should not take into account the time before the table was created
-  // (therefore average should still be 200)
+  // (therefore average should still be 100)
   FILE* fd = popen("snmpwalk -v2c -On -c clearwater 127.0.0.1:16161 .1.2.2.1.2.2", "r");
   char buf[1024];
   fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.2.2 = Gauge32: 200\n", buf); // Current 5 minutes
+  ASSERT_STREQ(".1.2.2.1.2.2 = Gauge32: 100\n", buf); // Current 5 minutes
 
-  // Add another value to the table and advance 89 seconds
-  tbl->accumulate(100);
-  cwtest_advance_time_ms(89000);
+  // Add another value to the table and advance 120 seconds
+  tbl->accumulate(200);
+  cwtest_advance_time_ms(120000);
 
   // This period has spent half the time at 200, and half at 100
   // So average value should be 150
@@ -584,31 +588,55 @@ TEST_F(SNMPTest, ContinuousAccumulatorTable)
   fgets(buf, sizeof(buf), fd);
   ASSERT_STREQ(".1.2.2.1.2.2 = Gauge32: 150\n", buf); // Current 5 minutes
 
-  // Jump forward to the next 5 minutes (half way through it)
+  // Jump forward to the next period, and move halfway through it
+  // As there is only a second left of this period, the average should not
+  // change
+  jump_to_next_periodstart(300000);
+
   cwtest_advance_time_ms(150000);
 
-  // The average value should be 100 for the current 5 minutes as it is carried
+  // The average value should be 200 for the current 5 minutes as it is carried
   // over, additionally, should be value for HWM and LWM, and variance 0
   fd = popen("snmpwalk -v2c -On -c clearwater 127.0.0.1:16161 .1.2.2.1.2.2", "r");
-  fgets(buf, sizeof(buf), fd); // Average
-  ASSERT_STREQ(".1.2.2.1.2.2 = Gauge32: 100\n", buf); // Current 5 minutes
+  fgets(buf, sizeof(buf), fd);
+  ASSERT_STREQ(".1.2.2.1.2.2 = Gauge32: 200\n", buf); // Current 5 minutes - Avg
 
   fd = popen("snmpwalk -v2c -On -c clearwater 127.0.0.1:16161 .1.2.2.1.3.2", "r");
-  fgets(buf, sizeof(buf), fd); // Variance
-  ASSERT_STREQ(".1.2.2.1.3.2 = Gauge32: 0\n", buf); // Current 5 minutes
+  fgets(buf, sizeof(buf), fd);
+  ASSERT_STREQ(".1.2.2.1.3.2 = Gauge32: 0\n", buf); // Current 5 minutes - Variance
 
   fd = popen("snmpwalk -v2c -On -c clearwater 127.0.0.1:16161 .1.2.2.1.4.2", "r");
-  fgets(buf, sizeof(buf), fd); // HWM
-  ASSERT_STREQ(".1.2.2.1.4.2 = Gauge32: 100\n", buf); // Current 5 minutes
+  fgets(buf, sizeof(buf), fd);
+  ASSERT_STREQ(".1.2.2.1.4.2 = Gauge32: 200\n", buf); // Current 5 minutes - HWM
 
   fd = popen("snmpwalk -v2c -On -c clearwater 127.0.0.1:16161 .1.2.2.1.5.2", "r");
-  fgets(buf, sizeof(buf), fd); // LWM
-  ASSERT_STREQ(".1.2.2.1.5.2 = Gauge32: 100\n", buf); // Current 5 minutes
+  fgets(buf, sizeof(buf), fd);
+  ASSERT_STREQ(".1.2.2.1.5.2 = Gauge32: 200\n", buf); // Current 5 minutes - LWM
+
+  // Add a HWM and LWM 5 seconds apart
+  tbl->accumulate(150);
+  cwtest_advance_time_ms(5000);
+
+  tbl->accumulate(250);
+  cwtest_advance_time_ms(5000);
+
+  // The average value should remain at 200, but the LWM and HWM are adjusted
+  fd = popen("snmpwalk -v2c -On -c clearwater 127.0.0.1:16161 .1.2.2.1.2.2", "r");
+  fgets(buf, sizeof(buf), fd);
+  ASSERT_STREQ(".1.2.2.1.2.2 = Gauge32: 200\n", buf); // Current 5 minutes - Avg
+
+  fd = popen("snmpwalk -v2c -On -c clearwater 127.0.0.1:16161 .1.2.2.1.4.2", "r");
+  fgets(buf, sizeof(buf), fd);
+  ASSERT_STREQ(".1.2.2.1.4.2 = Gauge32: 250\n", buf); // Current 5 minutes - HWM
+
+  fd = popen("snmpwalk -v2c -On -c clearwater 127.0.0.1:16161 .1.2.2.1.5.2", "r");
+  fgets(buf, sizeof(buf), fd);
+  ASSERT_STREQ(".1.2.2.1.5.2 = Gauge32: 150\n", buf); // Current 5 minutes - LWM
 
   // The previous 5 minutes should not have changed value
   fd = popen("snmpwalk -v2c -On -c clearwater 127.0.0.1:16161 .1.2.2.1.2.3", "r");
   fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.2.3 = Gauge32: 150\n", buf); // Current 5 minutes
+  ASSERT_STREQ(".1.2.2.1.2.3 = Gauge32: 150\n", buf); // Previous 5 minutes - Avg
 
   cwtest_reset_time();
   delete tbl;
