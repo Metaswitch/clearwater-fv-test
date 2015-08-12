@@ -633,6 +633,20 @@ TEST_F(SNMPTest, ContinuousAccumulatorTable)
   fgets(buf, sizeof(buf), fd);
   ASSERT_STREQ(".1.2.2.1.5.2 = Gauge32: 150\n", buf); // Current 5 minutes - LWM
 
+  // The variance is calculated as sqsum = 200 * 200 * 150000 +
+  //                                       150 * 150 * 5000 +
+  //                                       250 * 250 * 5000 = 6425000000
+  //                               sum = 200 * 150000 + 150 * 5000 + 250 * 5000
+  //                                   = 32000000
+  //                               var = 642500000 / 160000 - (32000000 /
+  //                               160000)^2
+  //                               = 40156 - 40000
+  //                               = 156
+  fd = popen("snmpwalk -v2c -On -c clearwater 127.0.0.1:16161 .1.2.2.1.3.2", "r");
+  fgets(buf, sizeof(buf), fd);
+  ASSERT_STREQ(".1.2.2.1.3.2 = Gauge32: 156\n", buf); // Current 5 minutes - Variance
+
+
   // The previous 5 minutes should not have changed value
   fd = popen("snmpwalk -v2c -On -c clearwater 127.0.0.1:16161 .1.2.2.1.2.3", "r");
   fgets(buf, sizeof(buf), fd);
