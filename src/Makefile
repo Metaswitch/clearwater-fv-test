@@ -16,7 +16,8 @@ TARGET_SOURCES_TEST := memcachedstore.cpp \
                        memcached_config.cpp \
                        signalhandler.cpp \
                        snmp_row.cpp \
-                       snmp_accumulator_table.cpp \
+                       snmp_event_accumulator_table.cpp \
+                       snmp_continuous_accumulator_table.cpp \
                        snmp_counter_table.cpp \
                        snmp_success_fail_count_table.cpp \
                        snmp_ip_count_table.cpp \
