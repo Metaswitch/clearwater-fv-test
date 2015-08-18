@@ -287,6 +287,8 @@ TEST_F(SNMPTest, IPCountTable)
 
 TEST_F(SNMPTest, SuccessFailCountTable)
 {
+  cwtest_completely_control_time();
+  
   // Create table
   SNMP::SuccessFailCountTable* tbl = SNMP::SuccessFailCountTable::create("success_fail_count", test_oid);
 
@@ -322,6 +324,7 @@ TEST_F(SNMPTest, SuccessFailCountTable)
   fgets(buf, sizeof(buf), fd);
   ASSERT_STREQ(".1.2.2.1.4.1 = Gauge32: 1\n", buf);
 
+  cwtest_reset_time();
   delete tbl;
 }
 
