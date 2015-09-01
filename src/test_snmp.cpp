@@ -32,7 +32,6 @@
  * as those licenses appear in the file LICENSE-OPENSSL.
  */
 
-#include <stdio.h>
 #include "gtest/gtest.h"
 #include "gmock/gmock.h"
 #include "snmp_event_accumulator_table.h"
@@ -64,6 +63,7 @@ static void* snmp_thread(void* data)
 
 static int snmp_get(std::string oid)
 {
+  // Returns integer value found at that OID.
   std::string command = "snmpget -v2c -Ov -Oq -c clearwater 127.0.0.1:16161 " + oid;
   std::string mode = "r";
   FILE* fd = popen(command.c_str(), mode.c_str());
