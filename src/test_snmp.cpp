@@ -61,6 +61,16 @@ static void* snmp_thread(void* data)
   return NULL;
 }
 
+static int snmp_get(std::string oid)
+{
+  // Returns integer value found at that OID.
+  std::string command = "snmpget -v2c -Ov -Oq -c clearwater 127.0.0.1:16161 " + oid;
+  std::string mode = "r";
+  FILE* fd = popen(command.c_str(), mode.c_str());
+  char buf[1024];
+  fgets(buf, sizeof(buf), fd);
+  return atoi(buf);
+}
 
 static pthread_t thr;
 std::string test_oid = ".1.2.2";
@@ -104,14 +114,9 @@ TEST_F(SNMPTest, ScalarValue)
   // Create a scalar
   SNMP::U32Scalar scalar("answer", test_oid);
   scalar.value = 42;
-
-  // Shell out to snmpget to query that scalar
-  FILE* fd = popen("snmpget -v2c -On -c clearwater 127.0.0.1:16161 .1.2.2", "r");
-  char buf[1024];
-  fgets(buf, sizeof(buf), fd);
-
+  
   // Check that it has the right OID, value and type
-  ASSERT_STREQ(".1.2.2 = Gauge32: 42\n", buf);
+  ASSERT_EQ(42, snmp_get(".1.2.2"));
 }
 
 
@@ -144,9 +149,6 @@ TEST_F(SNMPTest, LatencyCalculations)
 {
   cwtest_completely_control_time();
 
-  char buf[1024];
-  FILE* fd;
-
   // Create a table
   SNMP::EventAccumulatorTable* tbl = SNMP::EventAccumulatorTable::create("latency", test_oid);
 
@@ -157,13 +159,9 @@ TEST_F(SNMPTest, LatencyCalculations)
   cwtest_advance_time_ms(5000);
 
   // Average should be 100
-  fd = popen("snmpwalk -v2c -On -c clearwater 127.0.0.1:16161 .1.2.2.1.2.1", "r");
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.2.1 = Gauge32: 100\n", buf);
+  ASSERT_EQ(100, snmp_get(".1.2.2.1.2.1"));
   // Variance should be 0
-  fd = popen("snmpwalk -v2c -On -c clearwater 127.0.0.1:16161 .1.2.2.1.3.1", "r");
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.3.1 = Gauge32: 0\n", buf);
+  ASSERT_EQ(0, snmp_get(".1.2.2.1.3.1"));
 
   // Now input two samples in this latency period.
   tbl->accumulate(300);
@@ -173,21 +171,13 @@ TEST_F(SNMPTest, LatencyCalculations)
   cwtest_advance_time_ms(5000);
 
   // Average should be 400
-  fd = popen("snmpwalk -v2c -On -c clearwater 127.0.0.1:16161 .1.2.2.1.2.1", "r");
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.2.1 = Gauge32: 400\n", buf);
+  ASSERT_EQ(400, snmp_get(".1.2.2.1.2.1"));
   // HWM should be 500
-  fd = popen("snmpwalk -v2c -On -c clearwater 127.0.0.1:16161 .1.2.2.1.4.1", "r");
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.4.1 = Gauge32: 500\n", buf);
+  ASSERT_EQ(500, snmp_get(".1.2.2.1.4.1"));
   // LWM should be 300
-  fd = popen("snmpwalk -v2c -On -c clearwater 127.0.0.1:16161 .1.2.2.1.5.1", "r");
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.5.1 = Gauge32: 300\n", buf);
+  ASSERT_EQ(300, snmp_get(".1.2.2.1.5.1"));
   // Count should be 2
-  fd = popen("snmpwalk -v2c -On -c clearwater 127.0.0.1:16161 .1.2.2.1.6.1", "r");
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.6.1 = Gauge32: 2\n", buf);
+  ASSERT_EQ(2, snmp_get(".1.2.2.1.6.1"));
 
   cwtest_reset_time();
   delete tbl;
@@ -199,61 +189,38 @@ TEST_F(SNMPTest, CounterTimePeriods)
   // Create a table indexed by time period
   SNMP::CounterTable* tbl = SNMP::CounterTable::create("counter", test_oid);
 
-  // Shell out to snmpwalk to find all entries in that table
-  FILE* fd = popen("snmpwalk -v2c -On -c clearwater 127.0.0.1:16161 .1.2.2", "r");
-  char buf[1024];
-
   // At first, all three rows (previous 5s, current 5m, previous 5m) should have a zero value
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.2.1 = Gauge32: 0\n", buf);
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.2.2 = Gauge32: 0\n", buf);
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.2.3 = Gauge32: 0\n", buf);
+  ASSERT_EQ(0, snmp_get(".1.2.2.1.2.1"));
+  ASSERT_EQ(0, snmp_get(".1.2.2.1.2.2"));
+  ASSERT_EQ(0, snmp_get(".1.2.2.1.2.3"));
 
   // Increment the counter. This should show up in the current-five-minute stats, but nowhere else.
   tbl->increment();
 
-  fd = popen("snmpwalk -v2c -On -c clearwater 127.0.0.1:16161 .1.2.2", "r");
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.2.1 = Gauge32: 0\n", buf);
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.2.2 = Gauge32: 1\n", buf); // Current 5 minutes
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.2.3 = Gauge32: 0\n", buf);
+  ASSERT_EQ(0, snmp_get(".1.2.2.1.2.1"));
+  ASSERT_EQ(1, snmp_get(".1.2.2.1.2.2")); // Current 5 minutes
+  ASSERT_EQ(0, snmp_get(".1.2.2.1.2.3"));
 
   // Move on five seconds. The "previous five seconds" stat should now also reflect the increment.
   cwtest_advance_time_ms(5000);
 
-  fd = popen("snmpwalk -v2c -On -c clearwater 127.0.0.1:16161 .1.2.2", "r");
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.2.1 = Gauge32: 1\n", buf);
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.2.2 = Gauge32: 1\n", buf); // Current 5 minutes
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.2.3 = Gauge32: 0\n", buf);
+  ASSERT_EQ(1, snmp_get(".1.2.2.1.2.1"));
+  ASSERT_EQ(1, snmp_get(".1.2.2.1.2.2")); // Current 5 minutes
+  ASSERT_EQ(0, snmp_get(".1.2.2.1.2.3"));
 
   // Move on five more seconds. The "previous five seconds" stat should no longer reflect the increment.
   cwtest_advance_time_ms(5000);
 
-  fd = popen("snmpwalk -v2c -On -c clearwater 127.0.0.1:16161 .1.2.2", "r");
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.2.1 = Gauge32: 0\n", buf);
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.2.2 = Gauge32: 1\n", buf); // Current 5 minutes
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.2.3 = Gauge32: 0\n", buf);
+  ASSERT_EQ(0, snmp_get(".1.2.2.1.2.1"));
+  ASSERT_EQ(1, snmp_get(".1.2.2.1.2.2")); // Current 5 minutes
+  ASSERT_EQ(0, snmp_get(".1.2.2.1.2.3"));
 
   // Move on five minutes. Only the "previous five minutes" stat should now reflect the increment.
   cwtest_advance_time_ms(300000);
 
-  fd = popen("snmpwalk -v2c -On -c clearwater 127.0.0.1:16161 .1.2.2", "r");
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.2.1 = Gauge32: 0\n", buf);
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.2.2 = Gauge32: 0\n", buf);
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.2.3 = Gauge32: 1\n", buf);
+  ASSERT_EQ(0, snmp_get(".1.2.2.1.2.1"));
+  ASSERT_EQ(0, snmp_get(".1.2.2.1.2.2"));
+  ASSERT_EQ(1, snmp_get(".1.2.2.1.2.3"));
 
   // Increment the counter again and move on ten seconds
   tbl->increment();
@@ -261,9 +228,7 @@ TEST_F(SNMPTest, CounterTimePeriods)
 
   // That increment shouldn't be in the "previous 5 seconds" stat (because it was made 10 seconds
   // ago).
-  fd = popen("snmpwalk -v2c -On -c clearwater 127.0.0.1:16161 .1.2.2", "r");
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.2.1 = Gauge32: 0\n", buf);
+  ASSERT_EQ(0, snmp_get(".1.2.2.1.2.1"));
 
   cwtest_reset_time();
   delete tbl;
@@ -275,11 +240,11 @@ TEST_F(SNMPTest, IPCountTable)
   SNMP::IPCountTable* tbl = SNMP::IPCountTable::create("ip-counter", test_oid);
 
   tbl->get("127.0.0.1")->increment();
-
+  
   // Shell out to snmpwalk to find all entries in that table
   FILE* fd = popen("snmpwalk -v2c -On -c clearwater 127.0.0.1:16161 .1.2.2", "r");
   char buf[1024];
-
+  
   fgets(buf, sizeof(buf), fd);
   ASSERT_STREQ(".1.2.2.1.3.1.4.127.0.0.1 = Gauge32: 1\n", buf);
   delete tbl;
@@ -292,37 +257,21 @@ TEST_F(SNMPTest, SuccessFailCountTable)
   // Create table
   SNMP::SuccessFailCountTable* tbl = SNMP::SuccessFailCountTable::create("success_fail_count", test_oid);
 
-  // Shell out to snmpwalk to find all entries in that table
-  FILE* fd;
-  char buf[1024];
-
   tbl->increment_attempts();
   tbl->increment_successes();
   tbl->increment_attempts();
   tbl->increment_failures();
-  // Should be 2 attempt, 1 success, 1 failures.
-  fd = popen("snmpwalk -v2c -On -c clearwater 127.0.0.1:16161 .1.2.2.1.2.2", "r");
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.2.2 = Gauge32: 2\n", buf);
-  fd = popen("snmpwalk -v2c -On -c clearwater 127.0.0.1:16161 .1.2.2.1.3.2", "r");
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.3.2 = Gauge32: 1\n", buf);
-  fd = popen("snmpwalk -v2c -On -c clearwater 127.0.0.1:16161 .1.2.2.1.4.2", "r");
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.4.2 = Gauge32: 1\n", buf);
+  // Should be 2 attempts, 1 success, 1 failures.
+  ASSERT_EQ(2, snmp_get(".1.2.2.1.2.2"));
+  ASSERT_EQ(1, snmp_get(".1.2.2.1.3.2"));
+  ASSERT_EQ(1, snmp_get(".1.2.2.1.4.2"));
 
   // Move on five seconds. The "previous five seconds" stat should now also reflect the increment.
   cwtest_advance_time_ms(5000);
 
-  fd = popen("snmpwalk -v2c -On -c clearwater 127.0.0.1:16161 .1.2.2.1.2.1", "r");
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.2.1 = Gauge32: 2\n", buf);
-  fd = popen("snmpwalk -v2c -On -c clearwater 127.0.0.1:16161 .1.2.2.1.3.1", "r");
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.3.1 = Gauge32: 1\n", buf);
-  fd = popen("snmpwalk -v2c -On -c clearwater 127.0.0.1:16161 .1.2.2.1.4.1", "r");
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.4.1 = Gauge32: 1\n", buf);
+  ASSERT_EQ(2, snmp_get(".1.2.2.1.2.1"));
+  ASSERT_EQ(1, snmp_get(".1.2.2.1.3.1"));
+  ASSERT_EQ(1, snmp_get(".1.2.2.1.4.1"));
 
   cwtest_reset_time();
   delete tbl;
@@ -335,60 +284,35 @@ TEST_F(SNMPTest, SingleCountByNodeTypeTable)
   // Create a table
   SNMP::SingleCountByNodeTypeTable* tbl = SNMP::SingleCountByNodeTypeTable::create("single-count", test_oid, {SNMP::NodeTypes::SCSCF, SNMP::NodeTypes::ICSCF});
 
-  // Shell out to snmpwalk to find all entries in that table
-  FILE* fd = popen("snmpwalk -v2c -On -c clearwater 127.0.0.1:16161 .1.2.2", "r");
-  char buf[1024];
-
   // To start with, all values should be 0.
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.3.1.0 = Gauge32: 0\n", buf);
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.3.1.2 = Gauge32: 0\n", buf);
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.3.2.0 = Gauge32: 0\n", buf);
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.3.2.2 = Gauge32: 0\n", buf);
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.3.3.0 = Gauge32: 0\n", buf);
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.3.3.2 = Gauge32: 0\n", buf);
+  ASSERT_EQ(0, snmp_get(".1.2.2.1.3.1.0"));
+  ASSERT_EQ(0, snmp_get(".1.2.2.1.3.1.2"));
+  ASSERT_EQ(0, snmp_get(".1.2.2.1.3.2.0"));
+  ASSERT_EQ(0, snmp_get(".1.2.2.1.3.2.2"));
+  ASSERT_EQ(0, snmp_get(".1.2.2.1.3.3.0"));
+  ASSERT_EQ(0, snmp_get(".1.2.2.1.3.3.2"));
 
   // Add an entry for each supported node type. Only the current five minutes
   // should have a count.
   tbl->increment(SNMP::NodeTypes::SCSCF);
   tbl->increment(SNMP::NodeTypes::ICSCF);
 
-  fd = popen("snmpwalk -v2c -On -c clearwater 127.0.0.1:16161 .1.2.2", "r");
-
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.3.1.0 = Gauge32: 0\n", buf);
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.3.1.2 = Gauge32: 0\n", buf);
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.3.2.0 = Gauge32: 1\n", buf);
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.3.2.2 = Gauge32: 1\n", buf);
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.3.3.0 = Gauge32: 0\n", buf);
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.3.3.2 = Gauge32: 0\n", buf);
+  ASSERT_EQ(0, snmp_get(".1.2.2.1.3.1.0"));
+  ASSERT_EQ(0, snmp_get(".1.2.2.1.3.1.2"));
+  ASSERT_EQ(1, snmp_get(".1.2.2.1.3.2.0"));
+  ASSERT_EQ(1, snmp_get(".1.2.2.1.3.2.2"));
+  ASSERT_EQ(0, snmp_get(".1.2.2.1.3.3.0"));
+  ASSERT_EQ(0, snmp_get(".1.2.2.1.3.3.2"));
 
   // Move on five seconds. The "previous five seconds" stat should now also reflect the increment.
   cwtest_advance_time_ms(5000);
-  fd = popen("snmpwalk -v2c -On -c clearwater 127.0.0.1:16161 .1.2.2", "r");
 
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.3.1.0 = Gauge32: 1\n", buf);
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.3.1.2 = Gauge32: 1\n", buf);
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.3.2.0 = Gauge32: 1\n", buf);
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.3.2.2 = Gauge32: 1\n", buf);
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.3.3.0 = Gauge32: 0\n", buf);
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.3.3.2 = Gauge32: 0\n", buf);
+  ASSERT_EQ(1, snmp_get(".1.2.2.1.3.1.0"));
+  ASSERT_EQ(1, snmp_get(".1.2.2.1.3.1.2"));
+  ASSERT_EQ(1, snmp_get(".1.2.2.1.3.2.0"));
+  ASSERT_EQ(1, snmp_get(".1.2.2.1.3.2.2"));
+  ASSERT_EQ(0, snmp_get(".1.2.2.1.3.3.0"));
+  ASSERT_EQ(0, snmp_get(".1.2.2.1.3.3.2"));
 
   cwtest_reset_time();
   delete tbl;
@@ -400,72 +324,43 @@ TEST_F(SNMPTest, SuccessFailCountByRequestTypeTable)
 
   // Create a table
   SNMP::SuccessFailCountByRequestTypeTable* tbl = SNMP::SuccessFailCountByRequestTypeTable::create("success_fail_by_request", test_oid);
-  FILE* fd;
-  char buf[1024];
 
   // To start with, all values should be 0 (check the INVITE and ACK entries).
-  // Shell out to snmpwalk to find previous 5 second period attempts.
-  fd = popen("snmpwalk -v2c -On -c clearwater 127.0.0.1:16161 .1.2.2.1.3.1", "r");
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.3.1.0 = Gauge32: 0\n", buf);
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.3.1.1 = Gauge32: 0\n", buf);
+  // Check previous 5 second attempts.
+  ASSERT_EQ(0, snmp_get(".1.2.2.1.3.1.0"));
+  ASSERT_EQ(0, snmp_get(".1.2.2.1.3.1.1"));
 
-  // Shell out to snmpwalk to find previous 5 second period successes.
-  fd = popen("snmpwalk -v2c -On -c clearwater 127.0.0.1:16161 .1.2.2.1.4.1", "r");
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.4.1.0 = Gauge32: 0\n", buf);
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.4.1.1 = Gauge32: 0\n", buf);
+  // Check previous 5 second period successes.
+  ASSERT_EQ(0, snmp_get(".1.2.2.1.4.1.0"));
+  ASSERT_EQ(0, snmp_get(".1.2.2.1.4.1.1"));
 
-  // Shell out to snmpwalk to find previous 5 second period failures.
-  fd = popen("snmpwalk -v2c -On -c clearwater 127.0.0.1:16161 .1.2.2.1.5.1", "r");
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.5.1.0 = Gauge32: 0\n", buf);
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.5.1.1 = Gauge32: 0\n", buf);
+  // Check previous 5 second period failures.
+  ASSERT_EQ(0, snmp_get(".1.2.2.1.5.1.0"));
+  ASSERT_EQ(0, snmp_get(".1.2.2.1.5.1.1"));
 
-  // Shell out to snmpwalk to find current 5 minute period attempts.
-  fd = popen("snmpwalk -v2c -On -c clearwater 127.0.0.1:16161 .1.2.2.1.3.2", "r");
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.3.2.0 = Gauge32: 0\n", buf);
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.3.2.1 = Gauge32: 0\n", buf);
+  // Check current 5 minute period attempts.
+  ASSERT_EQ(0, snmp_get(".1.2.2.1.3.2.0"));
+  ASSERT_EQ(0, snmp_get(".1.2.2.1.3.2.1"));
 
-  // Shell out to snmpwalk to find current 5 minute period successes.
-  fd = popen("snmpwalk -v2c -On -c clearwater 127.0.0.1:16161 .1.2.2.1.4.2", "r");
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.4.2.0 = Gauge32: 0\n", buf);
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.4.2.1 = Gauge32: 0\n", buf);
+  // Check current 5 minute period successes.
+  ASSERT_EQ(0, snmp_get(".1.2.2.1.4.2.0"));
+  ASSERT_EQ(0, snmp_get(".1.2.2.1.4.2.1"));
 
-  // Shell out to snmpwalk to find current 5 minute period failures.
-  fd = popen("snmpwalk -v2c -On -c clearwater 127.0.0.1:16161 .1.2.2.1.5.2", "r");
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.5.2.0 = Gauge32: 0\n", buf);
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.5.2.1 = Gauge32: 0\n", buf);
+  // Check current 5 minute period failures.
+  ASSERT_EQ(0, snmp_get(".1.2.2.1.5.2.0"));
+  ASSERT_EQ(0, snmp_get(".1.2.2.1.5.2.1"));
 
-  // Shell out to snmpwalk to find previous 5 minute period attempts.
-  fd = popen("snmpwalk -v2c -On -c clearwater 127.0.0.1:16161 .1.2.2.1.3.3", "r");
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.3.3.0 = Gauge32: 0\n", buf);
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.3.3.1 = Gauge32: 0\n", buf);
+  // Check previous 5 minute period attempts.
+  ASSERT_EQ(0, snmp_get(".1.2.2.1.3.3.0"));
+  ASSERT_EQ(0, snmp_get(".1.2.2.1.3.3.1"));
 
-  // Shell out to snmpwalk to find previous 5 minute period successes.
-  fd = popen("snmpwalk -v2c -On -c clearwater 127.0.0.1:16161 .1.2.2.1.4.3", "r");
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.4.3.0 = Gauge32: 0\n", buf);
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.4.3.1 = Gauge32: 0\n", buf);
+  // Check previous 5 minute period successes.
+  ASSERT_EQ(0, snmp_get(".1.2.2.1.4.3.0"));
+  ASSERT_EQ(0, snmp_get(".1.2.2.1.4.3.1"));
 
-  // Shell out to snmpwalk to find previous 5 minute period failures.
-  fd = popen("snmpwalk -v2c -On -c clearwater 127.0.0.1:16161 .1.2.2.1.5.3", "r");
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.5.3.0 = Gauge32: 0\n", buf);
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.5.3.1 = Gauge32: 0\n", buf);
+  // Check previous 5 minute period failures.
+  ASSERT_EQ(0, snmp_get(".1.2.2.1.5.3.0"));
+  ASSERT_EQ(0, snmp_get(".1.2.2.1.5.3.1"));
 
   // Increment an attempt and success for INVITE, and an attempt and failure for ACK. Only the current five minutes should have a count.
   tbl->increment_attempts(SNMP::SIPRequestTypes::INVITE);
@@ -473,71 +368,44 @@ TEST_F(SNMPTest, SuccessFailCountByRequestTypeTable)
   tbl->increment_attempts(SNMP::SIPRequestTypes::ACK);
   tbl->increment_failures(SNMP::SIPRequestTypes::ACK);
 
-  // Shell out to snmpwalk to find previous 5 second period attempts.
-  fd = popen("snmpwalk -v2c -On -c clearwater 127.0.0.1:16161 .1.2.2.1.3.1", "r");
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.3.1.0 = Gauge32: 0\n", buf);
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.3.1.1 = Gauge32: 0\n", buf);
+  // Check previous 5 second period attempts.
+  ASSERT_EQ(0, snmp_get(".1.2.2.1.3.1.0"));
+  ASSERT_EQ(0, snmp_get(".1.2.2.1.3.1.1"));
 
-  // Shell out to snmpwalk to find previous 5 second period successes.
-  fd = popen("snmpwalk -v2c -On -c clearwater 127.0.0.1:16161 .1.2.2.1.4.1", "r");
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.4.1.0 = Gauge32: 0\n", buf);
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.4.1.1 = Gauge32: 0\n", buf);
+  // Check previous 5 second period successes.
+  ASSERT_EQ(0, snmp_get(".1.2.2.1.4.1.0"));
+  ASSERT_EQ(0, snmp_get(".1.2.2.1.4.1.1"));
 
-  // Shell out to snmpwalk to find previous 5 second period failures.
-  fd = popen("snmpwalk -v2c -On -c clearwater 127.0.0.1:16161 .1.2.2.1.5.1", "r");
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.5.1.0 = Gauge32: 0\n", buf);
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.5.1.1 = Gauge32: 0\n", buf);
+  // Check previous 5 second period failures.
+  ASSERT_EQ(0, snmp_get(".1.2.2.1.5.1.0"));
+  ASSERT_EQ(0, snmp_get(".1.2.2.1.5.1.1"));
 
-  // Shell out to snmpwalk to find current 5 minute period attempts.
-  fd = popen("snmpwalk -v2c -On -c clearwater 127.0.0.1:16161 .1.2.2.1.3.2", "r");
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.3.2.0 = Gauge32: 1\n", buf);
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.3.2.1 = Gauge32: 1\n", buf);
+  // Check current 5 minute period attempts.
+  ASSERT_EQ(1, snmp_get(".1.2.2.1.3.2.0"));
+  ASSERT_EQ(1, snmp_get(".1.2.2.1.3.2.1"));
 
-  // Shell out to snmpwalk to find current 5 minute period successes.
-  fd = popen("snmpwalk -v2c -On -c clearwater 127.0.0.1:16161 .1.2.2.1.4.2", "r");
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.4.2.0 = Gauge32: 1\n", buf);
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.4.2.1 = Gauge32: 0\n", buf);
+  // Check current 5 minute period successes.
+  ASSERT_EQ(1, snmp_get(".1.2.2.1.4.2.0"));
+  ASSERT_EQ(0, snmp_get(".1.2.2.1.4.2.1"));
 
-  // Shell out to snmpwalk to find current 5 minute period failures.
-  fd = popen("snmpwalk -v2c -On -c clearwater 127.0.0.1:16161 .1.2.2.1.5.2", "r");
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.5.2.0 = Gauge32: 0\n", buf);
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.5.2.1 = Gauge32: 1\n", buf);
+  // Check current 5 minute period failures.
+  ASSERT_EQ(0, snmp_get(".1.2.2.1.5.2.0"));
+  ASSERT_EQ(1, snmp_get(".1.2.2.1.5.2.1"));
 
   // Move on five seconds. The "previous five seconds" stat should now also reflect the increment.
   cwtest_advance_time_ms(5000);
 
-  // Shell out to snmpwalk to find previous 5 second period attempts.
-  fd = popen("snmpwalk -v2c -On -c clearwater 127.0.0.1:16161 .1.2.2.1.3.1", "r");
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.3.1.0 = Gauge32: 1\n", buf);
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.3.1.1 = Gauge32: 1\n", buf);
+  // Check previous 5 second period attempts.
+  ASSERT_EQ(1, snmp_get(".1.2.2.1.3.1.0"));
+  ASSERT_EQ(1, snmp_get(".1.2.2.1.3.1.1"));
 
-  // Shell out to snmpwalk to find previous 5 second period successes.
-  fd = popen("snmpwalk -v2c -On -c clearwater 127.0.0.1:16161 .1.2.2.1.4.1", "r");
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.4.1.0 = Gauge32: 1\n", buf);
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.4.1.1 = Gauge32: 0\n", buf);
+  // Check previous 5 second period successes.
+  ASSERT_EQ(1, snmp_get(".1.2.2.1.4.1.0"));
+  ASSERT_EQ(0, snmp_get(".1.2.2.1.4.1.1"));
 
-  // Shell out to snmpwalk to find previous 5 second period failures.
-  fd = popen("snmpwalk -v2c -On -c clearwater 127.0.0.1:16161 .1.2.2.1.5.1", "r");
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.5.1.0 = Gauge32: 0\n", buf);
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.5.1.1 = Gauge32: 1\n", buf);
+  // Check previous 5 second period failures.
+  ASSERT_EQ(0, snmp_get(".1.2.2.1.5.1.0"));
+  ASSERT_EQ(1, snmp_get(".1.2.2.1.5.1.1"));
 
   cwtest_reset_time();
   delete tbl;
@@ -576,10 +444,7 @@ TEST_F(SNMPTest, ContinuousAccumulatorTable)
 
   // Average should not take into account the time before the table was created
   // (therefore average should still be 100)
-  FILE* fd = popen("snmpwalk -v2c -On -c clearwater 127.0.0.1:16161 .1.2.2.1.2.2", "r");
-  char buf[1024];
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.2.2 = Gauge32: 100\n", buf); // Current 5 minutes
+  ASSERT_EQ(100, snmp_get(".1.2.2.1.2.2")); // Current 5 minutes
 
   // Add another value to the table and advance 120 seconds
   tbl->accumulate(200);
@@ -587,9 +452,7 @@ TEST_F(SNMPTest, ContinuousAccumulatorTable)
 
   // This period has spent half the time at 200, and half at 100
   // So average value should be 150
-  fd = popen("snmpwalk -v2c -On -c clearwater 127.0.0.1:16161 .1.2.2.1.2.2", "r");
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.2.2 = Gauge32: 150\n", buf); // Current 5 minutes
+  ASSERT_EQ(150, snmp_get(".1.2.2.1.2.2")); // Current 5 minutes
 
   // Jump forward to the next period, and move halfway through it
   // As there is only a second left of this period, the average should not
@@ -600,21 +463,13 @@ TEST_F(SNMPTest, ContinuousAccumulatorTable)
 
   // The average value should be 200 for the current 5 minutes as it is carried
   // over, additionally, should be value for HWM and LWM, and variance 0
-  fd = popen("snmpwalk -v2c -On -c clearwater 127.0.0.1:16161 .1.2.2.1.2.2", "r");
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.2.2 = Gauge32: 200\n", buf); // Current 5 minutes - Avg
+  ASSERT_EQ(200, snmp_get(".1.2.2.1.2.2")); // Current 5 minutes - Avg
 
-  fd = popen("snmpwalk -v2c -On -c clearwater 127.0.0.1:16161 .1.2.2.1.3.2", "r");
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.3.2 = Gauge32: 0\n", buf); // Current 5 minutes - Variance
+  ASSERT_EQ(0, snmp_get(".1.2.2.1.3.2")); // Current 5 minutes - Variance
 
-  fd = popen("snmpwalk -v2c -On -c clearwater 127.0.0.1:16161 .1.2.2.1.4.2", "r");
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.4.2 = Gauge32: 200\n", buf); // Current 5 minutes - HWM
+  ASSERT_EQ(200, snmp_get(".1.2.2.1.4.2")); // Current 5 minutes - HWM
 
-  fd = popen("snmpwalk -v2c -On -c clearwater 127.0.0.1:16161 .1.2.2.1.5.2", "r");
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.5.2 = Gauge32: 200\n", buf); // Current 5 minutes - LWM
+  ASSERT_EQ(200, snmp_get(".1.2.2.1.5.2")); // Current 5 minutes - LWM
 
   // Add a HWM and LWM 5 seconds apart
   tbl->accumulate(150);
@@ -624,17 +479,11 @@ TEST_F(SNMPTest, ContinuousAccumulatorTable)
   cwtest_advance_time_ms(5000);
 
   // The average value should remain at 200, but the LWM and HWM are adjusted
-  fd = popen("snmpwalk -v2c -On -c clearwater 127.0.0.1:16161 .1.2.2.1.2.2", "r");
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.2.2 = Gauge32: 200\n", buf); // Current 5 minutes - Avg
+  ASSERT_EQ(200, snmp_get(".1.2.2.1.2.2")); // Current 5 minutes - Avg
 
-  fd = popen("snmpwalk -v2c -On -c clearwater 127.0.0.1:16161 .1.2.2.1.4.2", "r");
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.4.2 = Gauge32: 250\n", buf); // Current 5 minutes - HWM
+  ASSERT_EQ(250, snmp_get(".1.2.2.1.4.2")); // Current 5 minutes - HWM
 
-  fd = popen("snmpwalk -v2c -On -c clearwater 127.0.0.1:16161 .1.2.2.1.5.2", "r");
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.5.2 = Gauge32: 150\n", buf); // Current 5 minutes - LWM
+  ASSERT_EQ(150, snmp_get(".1.2.2.1.5.2")); // Current 5 minutes - LWM
 
   // The variance is calculated as sqsum = 200 * 200 * 150000 +
   //                                       150 * 150 * 5000 +
@@ -645,17 +494,11 @@ TEST_F(SNMPTest, ContinuousAccumulatorTable)
   //                               160000)^2
   //                               = 40156 - 40000
   //                               = 156
-  fd = popen("snmpwalk -v2c -On -c clearwater 127.0.0.1:16161 .1.2.2.1.3.2", "r");
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.3.2 = Gauge32: 156\n", buf); // Current 5 minutes - Variance
-
+  ASSERT_EQ(156, snmp_get(".1.2.2.1.3.2")); // Current 5 minutes - Variance
 
   // The previous 5 minutes should not have changed value
-  fd = popen("snmpwalk -v2c -On -c clearwater 127.0.0.1:16161 .1.2.2.1.2.3", "r");
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.2.3 = Gauge32: 150\n", buf); // Previous 5 minutes - Avg
+  ASSERT_EQ(150, snmp_get(".1.2.2.1.2.3")); // Previous 5 minutes - Avg
 
   cwtest_reset_time();
   delete tbl;
-
 }
