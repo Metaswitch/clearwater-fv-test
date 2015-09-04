@@ -43,6 +43,7 @@
 #include "test_interposer.hpp"
 #include "snmp_single_count_by_node_type_table.h"
 #include "snmp_success_fail_count_by_request_type_table.h"
+#include "snmp_cx_counter_table.h"
 
 #ifdef READ
 #error "netsnmp includes have polluted the namespace!"
@@ -498,6 +499,55 @@ TEST_F(SNMPTest, ContinuousAccumulatorTable)
 
   // The previous 5 minutes should not have changed value
   ASSERT_EQ(150, snmp_get(".1.2.2.1.2.3")); // Previous 5 minutes - Avg
+
+  cwtest_reset_time();
+  delete tbl;
+}
+
+TEST_F(SNMPTest, CxCounterTable)
+{
+  cwtest_completely_control_time();
+  
+  // Create table
+  SNMP::CxCounterTable* tbl = SNMP::CxCounterTable::create("cx_counter", test_oid);
+  
+  // Check that the rows that are there are the ones we expect and that initial
+  // values are zero.
+  FILE* fd = popen("snmpwalk -v2c -On -c clearwater 127.0.0.1:16161 .1.2.2", "r");
+  // Check the first base protocol rows.
+  char buf[1024];
+  fgets(buf, sizeof(buf), fd);
+  ASSERT_STREQ(".1.2.2.1.4.1.0.1001 = Gauge32: 0\n", buf);
+  fgets(buf, sizeof(buf), fd);
+  ASSERT_STREQ(".1.2.2.1.4.1.0.2001 = Gauge32: 0\n", buf);
+  fgets(buf, sizeof(buf), fd);
+  ASSERT_STREQ(".1.2.2.1.4.1.0.2002 = Gauge32: 0\n", buf);
+
+  fd = popen("snmpwalk -v2c -On -c clearwater 127.0.0.1:16161 .1.2.2.1.4.1.1", "r");
+  // Check the first 3GPP rows.
+  fgets(buf, sizeof(buf), fd);
+  ASSERT_STREQ(".1.2.2.1.4.1.1.2001 = Gauge32: 0\n", buf);
+  fgets(buf, sizeof(buf), fd);
+  ASSERT_STREQ(".1.2.2.1.4.1.1.2002 = Gauge32: 0\n", buf);
+  fgets(buf, sizeof(buf), fd);
+  ASSERT_STREQ(".1.2.2.1.4.1.1.2003 = Gauge32: 0\n", buf);
+
+  tbl->increment(SNMP::AppId::BASE, 2001);
+  tbl->increment(SNMP::AppId::_3GPP, 5011);
+
+  // Only the current five minute values should reflect the increment.
+  ASSERT_EQ(0, snmp_get(".1.2.2.1.4.1.0.2001"));
+  ASSERT_EQ(1, snmp_get(".1.2.2.1.4.2.0.2001"));
+  ASSERT_EQ(0, snmp_get(".1.2.2.1.4.3.0.2001"));
+  ASSERT_EQ(0, snmp_get(".1.2.2.1.4.1.1.5011"));
+  ASSERT_EQ(1, snmp_get(".1.2.2.1.4.2.1.5011"));
+  ASSERT_EQ(0, snmp_get(".1.2.2.1.4.3.1.5011"));
+
+  // Move on five seconds. The "previous five seconds" stat should now also
+  // reflect the increment.
+  cwtest_advance_time_ms(5000);
+  ASSERT_EQ(1, snmp_get(".1.2.2.1.4.1.0.2001"));
+  ASSERT_EQ(1, snmp_get(".1.2.2.1.4.1.1.5011"));
 
   cwtest_reset_time();
   delete tbl;
