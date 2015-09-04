@@ -531,9 +531,9 @@ TEST_F(SNMPTest, CxCounterTable)
   ASSERT_STREQ(".1.2.2.1.4.1.1.2002 = Gauge32: 0\n", buf);
   fgets(buf, sizeof(buf), fd);
   ASSERT_STREQ(".1.2.2.1.4.1.1.2003 = Gauge32: 0\n", buf);
-
-  tbl->increment(SNMP::AppId::BASE, 2001);
-  tbl->increment(SNMP::AppId::_3GPP, 5011);
+  
+  tbl->increment(SNMP::DiameterAppId::BASE, 2001);
+  tbl->increment(SNMP::DiameterAppId::_3GPP, 5011);
 
   // Only the current five minute values should reflect the increment.
   ASSERT_EQ(0, snmp_get(".1.2.2.1.4.1.0.2001"));
