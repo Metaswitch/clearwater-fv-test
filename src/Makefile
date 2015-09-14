@@ -21,6 +21,7 @@ TARGET_SOURCES_TEST := memcachedstore.cpp \
                        snmp_counter_table.cpp \
                        snmp_cx_counter_table.cpp \
                        snmp_success_fail_count_table.cpp \
+                       snmp_infinite_timer_count_table.cpp \
                        snmp_ip_count_table.cpp \
                        snmp_single_count_by_node_type_table.cpp \
                        snmp_success_fail_count_by_request_type_table.cpp \
@@ -35,7 +36,8 @@ TARGET_SOURCES_TEST := memcachedstore.cpp \
                        test_memcached_config.cpp \
                        test_memcachedstoreview.cpp \
                        test_dns.cpp \
-                       test_snmp.cpp
+                       test_snmp.cpp \
+                       timer_counter.cpp
 
 TARGET_EXTRA_OBJS_TEST := gmock-all.o \
                           gtest-all.o \

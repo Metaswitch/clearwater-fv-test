@@ -44,6 +44,7 @@
 #include "snmp_single_count_by_node_type_table.h"
 #include "snmp_success_fail_count_by_request_type_table.h"
 #include "snmp_cx_counter_table.h"
+#include "snmp_infinite_timer_count_table.h"
 
 #ifdef READ
 #error "netsnmp includes have polluted the namespace!"
@@ -71,6 +72,31 @@ static int snmp_get(std::string oid)
   char buf[1024];
   fgets(buf, sizeof(buf), fd);
   return atoi(buf);
+}
+
+static std::string snmp_get_next(std::string oid)
+{
+  // Returns the result of getnextt at that OID.
+  std::string command = "snmpgetnext -v2c -On -c clearwater 127.0.0.1:16161 " + oid;
+  std::string mode = "r";
+  FILE* fd = popen(command.c_str(), mode.c_str());
+  char buf[1024];
+  fgets(buf, sizeof(buf), fd);
+  return buf;
+}
+
+// Advance to the next start of interval - accurate to within the first
+// second. i.e. May jump to 12:00:00:634, but never before 12:00:00:000
+void jump_to_next_periodstart(uint32_t interval_ms)
+{
+  struct timespec now;
+  clock_gettime(CLOCK_REALTIME_COARSE, &now);
+
+  // Calculate the current time in ms
+  uint64_t ms_since_epoch = (now.tv_sec * 1000) + (now.tv_nsec / 1000000);
+
+  // Move time forward
+  cwtest_advance_time_ms(interval_ms - (ms_since_epoch % interval_ms));
 }
 
 static pthread_t thr;
@@ -115,7 +141,7 @@ TEST_F(SNMPTest, ScalarValue)
   // Create a scalar
   SNMP::U32Scalar scalar("answer", test_oid);
   scalar.value = 42;
-  
+
   // Check that it has the right OID, value and type
   ASSERT_EQ(42, snmp_get(".1.2.2"));
 }
@@ -241,11 +267,11 @@ TEST_F(SNMPTest, IPCountTable)
   SNMP::IPCountTable* tbl = SNMP::IPCountTable::create("ip-counter", test_oid);
 
   tbl->get("127.0.0.1")->increment();
-  
+
   // Shell out to snmpwalk to find all entries in that table
   FILE* fd = popen("snmpwalk -v2c -On -c clearwater 127.0.0.1:16161 .1.2.2", "r");
   char buf[1024];
-  
+
   fgets(buf, sizeof(buf), fd);
   ASSERT_STREQ(".1.2.2.1.3.1.4.127.0.0.1 = Gauge32: 1\n", buf);
   delete tbl;
@@ -254,7 +280,7 @@ TEST_F(SNMPTest, IPCountTable)
 TEST_F(SNMPTest, SuccessFailCountTable)
 {
   cwtest_completely_control_time();
-  
+
   // Create table
   SNMP::SuccessFailCountTable* tbl = SNMP::SuccessFailCountTable::create("success_fail_count", test_oid);
 
@@ -412,19 +438,6 @@ TEST_F(SNMPTest, SuccessFailCountByRequestTypeTable)
   delete tbl;
 }
 
-// Advance to the next start of interval - accurate to within the first
-// second. i.e. May jump to 12:00:00:634, but never before 12:00:00:000
-void jump_to_next_periodstart(uint32_t interval_ms)
-{
-  struct timespec now;
-  clock_gettime(CLOCK_REALTIME_COARSE, &now);
-
-  // Calculate the current time in ms
-  uint64_t ms_since_epoch = (now.tv_sec * 1000) + (now.tv_nsec / 1000000);
-
-  // Move time forward
-  cwtest_advance_time_ms(interval_ms - (ms_since_epoch % interval_ms));
-}
 
 TEST_F(SNMPTest, ContinuousAccumulatorTable)
 {
@@ -465,11 +478,8 @@ TEST_F(SNMPTest, ContinuousAccumulatorTable)
   // The average value should be 200 for the current 5 minutes as it is carried
   // over, additionally, should be value for HWM and LWM, and variance 0
   ASSERT_EQ(200, snmp_get(".1.2.2.1.2.2")); // Current 5 minutes - Avg
-
   ASSERT_EQ(0, snmp_get(".1.2.2.1.3.2")); // Current 5 minutes - Variance
-
   ASSERT_EQ(200, snmp_get(".1.2.2.1.4.2")); // Current 5 minutes - HWM
-
   ASSERT_EQ(200, snmp_get(".1.2.2.1.5.2")); // Current 5 minutes - LWM
 
   // Add a HWM and LWM 5 seconds apart
@@ -507,10 +517,10 @@ TEST_F(SNMPTest, ContinuousAccumulatorTable)
 TEST_F(SNMPTest, CxCounterTable)
 {
   cwtest_completely_control_time();
-  
+
   // Create table
   SNMP::CxCounterTable* tbl = SNMP::CxCounterTable::create("cx_counter", test_oid);
-  
+
   // Check that the rows that are there are the ones we expect and that initial
   // values are zero.
   FILE* fd = popen("snmpwalk -v2c -On -c clearwater 127.0.0.1:16161 .1.2.2", "r");
@@ -531,7 +541,7 @@ TEST_F(SNMPTest, CxCounterTable)
   ASSERT_STREQ(".1.2.2.1.4.1.1.2002 = Gauge32: 0\n", buf);
   fgets(buf, sizeof(buf), fd);
   ASSERT_STREQ(".1.2.2.1.4.1.1.2003 = Gauge32: 0\n", buf);
-  
+
   tbl->increment(SNMP::DiameterAppId::BASE, 2001);
   tbl->increment(SNMP::DiameterAppId::_3GPP, 5011);
 
@@ -548,6 +558,119 @@ TEST_F(SNMPTest, CxCounterTable)
   cwtest_advance_time_ms(5000);
   ASSERT_EQ(1, snmp_get(".1.2.2.1.4.1.0.2001"));
   ASSERT_EQ(1, snmp_get(".1.2.2.1.4.1.1.5011"));
+
+  cwtest_reset_time();
+  delete tbl;
+}
+
+
+TEST_F(SNMPTest, InfiniteTable)
+{
+  cwtest_completely_control_time();
+
+  // Consider a 5 minute period
+  jump_to_next_periodstart(300000);
+
+  // Create table
+  SNMP::InfiniteTimerCountTable* tbl = SNMP::InfiniteTimerCountTable::create("infinite_table",
+                                                                             test_oid);
+  // The infinite table uses the OID to specify values of interest. The value is
+  // represented by length, followed by values in ASCII. For example, the string
+  // "AZ" is represented by .2.65.90
+
+  // Check that for a random string (we use "CALL"), the returned value is 0
+  for (int row = 1; row < 4; row++)
+  {
+    for (int column = 2; column < 6; column++)
+    {
+      ASSERT_EQ(0, snmp_get(test_oid + ".3.65.66.67." + std::to_string(column)
+                            + "." + std::to_string(row)));
+    }
+  }
+
+  // Add 100 "ABC" tags and advance one minute
+  for (int ii = 0; ii < 100; ii++) tbl->increment("ABC");
+  cwtest_advance_time_ms(60000);
+
+  // Current 5 minutes
+  EXPECT_EQ(100, snmp_get(test_oid + ".3.65.66.67.2.2")); // Average
+  EXPECT_EQ(0, snmp_get(test_oid + ".3.65.66.67.3.2")); // Variance
+  EXPECT_EQ(100, snmp_get(test_oid + ".3.65.66.67.4.2")); // HWM
+  EXPECT_EQ(0, snmp_get(test_oid + ".3.65.66.67.5.2")); // LWM
+
+  // Previous 5 minutes
+  EXPECT_EQ(0, snmp_get(test_oid + ".3.65.66.67.2.3")); // Average
+  EXPECT_EQ(0, snmp_get(test_oid + ".3.65.66.67.3.3")); // Variance
+  EXPECT_EQ(0, snmp_get(test_oid + ".3.65.66.67.4.3")); // HWM
+  EXPECT_EQ(0, snmp_get(test_oid + ".3.65.66.67.5.3")); // LWM
+
+  // Drop 50 "ABC" tags and advance another minute
+  for (int ii = 0; ii < 50; ii++) tbl->decrement("ABC");
+  cwtest_advance_time_ms(60000);
+
+  // Variance = (100 * 100 * 60000 + 50 * 50 * 60000 / 120000) - (75 * 75) =
+  // 625
+
+  // Current 5 minutes
+  EXPECT_EQ(75, snmp_get(test_oid + ".3.65.66.67.2.2")); // Average
+  EXPECT_EQ(625, snmp_get(test_oid + ".3.65.66.67.3.2")); // Variance
+  EXPECT_EQ(100, snmp_get(test_oid + ".3.65.66.67.4.2")); // HWM
+  EXPECT_EQ(0, snmp_get(test_oid + ".3.65.66.67.5.2")); // LWM
+
+  // Previous 5 minutes
+  EXPECT_EQ(0, snmp_get(test_oid + ".3.65.66.67.2.3")); // Average
+  EXPECT_EQ(0, snmp_get(test_oid + ".3.65.66.67.3.3")); // Variance
+  EXPECT_EQ(0, snmp_get(test_oid + ".3.65.66.67.4.3")); // HWM
+  EXPECT_EQ(0, snmp_get(test_oid + ".3.65.66.67.5.3")); // LWM
+
+  // Jump to the next 5 minutes
+  cwtest_advance_time_ms(180000);
+
+  // Variance = ((100 * 100 * 60000 + 50 * 50 * 240001) / 300000 - (60 * 60) =
+  // 400
+
+  // Current 5 minutes
+  EXPECT_EQ(50, snmp_get(test_oid + ".3.65.66.67.2.2")); // Average
+  EXPECT_EQ(0, snmp_get(test_oid + ".3.65.66.67.3.2")); // Variance
+  EXPECT_EQ(50, snmp_get(test_oid + ".3.65.66.67.4.2")); // HWM
+  EXPECT_EQ(50, snmp_get(test_oid + ".3.65.66.67.5.2")); // LWM
+
+  // Previous 5 minutes
+  EXPECT_EQ(60, snmp_get(test_oid + ".3.65.66.67.2.3")); // Average
+  EXPECT_EQ(400, snmp_get(test_oid + ".3.65.66.67.3.3")); // Variance
+  EXPECT_EQ(100, snmp_get(test_oid + ".3.65.66.67.4.3")); // HWM
+  EXPECT_EQ(0, snmp_get(test_oid + ".3.65.66.67.5.3")); // LWM
+
+  // Push timers back up to 75, and advance 5 seconds
+  for (int ii = 0; ii < 25; ii++) tbl->increment("ABC");
+  cwtest_advance_time_ms(5000);
+
+  // We will now walk the entire table, ensuring the get next performs well
+  EXPECT_EQ(".1.2.2.3.65.66.67.2.1 = Gauge32: 75\n", snmp_get_next(test_oid + ".3.65.66.67")); // p5s Avg
+  EXPECT_EQ(".1.2.2.3.65.66.67.2.2 = Gauge32: 75\n", snmp_get_next(test_oid + ".3.65.66.67.2.1")); // c5m Avg
+  EXPECT_EQ(".1.2.2.3.65.66.67.2.3 = Gauge32: 60\n", snmp_get_next(test_oid + ".3.65.66.67.2.2")); // p5m Avg
+  EXPECT_EQ(".1.2.2.3.65.66.67.3.1 = Gauge32: 0\n", snmp_get_next(test_oid + ".3.65.66.67.2.3")); // p5s Var
+  EXPECT_EQ(".1.2.2.3.65.66.67.3.2 = Gauge32: 0\n", snmp_get_next(test_oid + ".3.65.66.67.3.1")); // c5m Var
+  EXPECT_EQ(".1.2.2.3.65.66.67.3.3 = Gauge32: 400\n", snmp_get_next(test_oid + ".3.65.66.67.3.2")); // p5m Var
+  EXPECT_EQ(".1.2.2.3.65.66.67.4.1 = Gauge32: 75\n", snmp_get_next(test_oid + ".3.65.66.67.3.3")); // p5s HWM
+  EXPECT_EQ(".1.2.2.3.65.66.67.4.2 = Gauge32: 75\n", snmp_get_next(test_oid + ".3.65.66.67.4.1")); // c5m HWM
+  EXPECT_EQ(".1.2.2.3.65.66.67.4.3 = Gauge32: 100\n", snmp_get_next(test_oid + ".3.65.66.67.4.2")); // p5m HWM
+  EXPECT_EQ(".1.2.2.3.65.66.67.5.1 = Gauge32: 50\n", snmp_get_next(test_oid + ".3.65.66.67.4.3")); // p5s LWM
+  EXPECT_EQ(".1.2.2.3.65.66.67.5.2 = Gauge32: 50\n", snmp_get_next(test_oid + ".3.65.66.67.5.1")); // c5m LWM
+  EXPECT_EQ(".1.2.2.3.65.66.67.5.3 = Gauge32: 0\n", snmp_get_next(test_oid + ".3.65.66.67.5.2")); // p5m LWM
+  EXPECT_EQ(".1.2.2.3.65.66.67.5.3 = No more variables left in this MIB View (It is past the end of the MIB tree)\n", snmp_get_next(test_oid + ".3.65.66.67.5.3"));
+
+  // Also check we return sensible get_next values given odd OIDS
+
+  // Long OID should just truncate and give the next
+  EXPECT_EQ(".1.2.2.3.65.66.67.2.1 = Gauge32: 75\n", snmp_get_next(test_oid + ".3.65.66.67.1.1.1.1.1.1"));
+
+  // Short OID should add information to the next
+  EXPECT_EQ(".1.2.2.3.65.66.67.3.1 = Gauge32: 0\n", snmp_get_next(test_oid + ".3.65.66.67.3"));
+
+  // Long OID at the end of a column is the same as the end of the column
+  EXPECT_EQ(".1.2.2.3.65.66.67.5.1 = Gauge32: 50\n", snmp_get_next(test_oid + ".3.65.66.67.4.3.1.1.1.1"));
+
 
   cwtest_reset_time();
   delete tbl;
