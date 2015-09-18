@@ -658,7 +658,7 @@ TEST_F(SNMPTest, InfiniteTable)
   EXPECT_EQ(".1.2.2.3.65.66.67.5.1 = Gauge32: 50\n", snmp_get_next(test_oid + ".3.65.66.67.4.3")); // p5s LWM
   EXPECT_EQ(".1.2.2.3.65.66.67.5.2 = Gauge32: 50\n", snmp_get_next(test_oid + ".3.65.66.67.5.1")); // c5m LWM
   EXPECT_EQ(".1.2.2.3.65.66.67.5.3 = Gauge32: 0\n", snmp_get_next(test_oid + ".3.65.66.67.5.2")); // p5m LWM
-  EXPECT_EQ(".1.2.2.3.65.66.67.5.3 = No more variables left in this MIB View (It is past the end of the MIB tree)\n", snmp_get_next(test_oid + ".3.65.66.67.5.3"));
+  EXPECT_EQ(".1.2.2.3.65.66.68.2.1 = Gauge32: 0\n", snmp_get_next(test_oid + ".3.65.66.67.5.3"));
 
   // Also check we return sensible get_next values given odd OIDS
 
@@ -670,7 +670,6 @@ TEST_F(SNMPTest, InfiniteTable)
 
   // Long OID at the end of a column is the same as the end of the column
   EXPECT_EQ(".1.2.2.3.65.66.67.5.1 = Gauge32: 50\n", snmp_get_next(test_oid + ".3.65.66.67.4.3.1.1.1.1"));
-
 
   cwtest_reset_time();
   delete tbl;
