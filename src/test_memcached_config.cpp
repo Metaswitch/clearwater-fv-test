@@ -78,8 +78,7 @@ public:
 TEST_F(MemcachedConfigTest, AllSettings)
 {
   write_config("servers=192.168.0.1:11211,192.168.0.2:11211\n"
-               "new_servers=10.0.0.1:11211\n"
-               "tombstone_lifetime=200");
+               "new_servers=10.0.0.1:11211\n");
 
   MemcachedConfig config;
   EXPECT_TRUE(_reader->read_config(config));
@@ -88,7 +87,7 @@ TEST_F(MemcachedConfigTest, AllSettings)
   EXPECT_EQ(config.servers[1], "192.168.0.2:11211");
   EXPECT_EQ(config.new_servers.size(), 1u);
   EXPECT_EQ(config.new_servers[0], "10.0.0.1:11211");
-  EXPECT_EQ(config.tombstone_lifetime, 200);
+  EXPECT_EQ(config.tombstone_lifetime, 1800);
 }
 
 
@@ -103,8 +102,20 @@ TEST_F(MemcachedConfigTest, OptionalFieldsEmpty)
   EXPECT_EQ(config.servers[1], "192.168.0.2:11211");
   // new_servers defaults to an empty vector.
   EXPECT_EQ(config.new_servers.size(), 0u);
-  // tombstone_lifetime defaults to 0 at present (meaning don't use tombstones).
-  EXPECT_EQ(config.tombstone_lifetime, 0);
+  EXPECT_EQ(config.tombstone_lifetime, 1800);
+}
+
+
+TEST_F(MemcachedConfigTest, TombstoneLifetime)
+{
+  write_config("servers=192.168.0.1:11211,192.168.0.2:11211\n"
+               "new_servers=10.0.0.1:11211\n"
+               "tombstone_lifetime=200");
+
+  MemcachedConfig config;
+  // We no longer support tombstone_lifetime as a valid setting in
+  // cluster_settings, so this file should be rejected.
+  EXPECT_FALSE(_reader->read_config(config));
 }
 
 
@@ -140,7 +151,7 @@ TEST_F(MemcachedConfigTest, ServerListEmpty)
 
 TEST_F(MemcachedConfigTest, NoServerLine)
 {
-  write_config("tombstone_lifetime=200");
+  write_config("new_servers=a:11211");
 
   MemcachedConfig config;
   EXPECT_FALSE(_reader->read_config(config));
@@ -165,15 +176,6 @@ TEST_F(MemcachedConfigTest, BothServerListsEmpty)
 
   MemcachedConfig config;
   EXPECT_TRUE(_reader->read_config(config));
-}
-
-TEST_F(MemcachedConfigTest, BadTombstoneLifetime)
-{
-  write_config("servers=192.168.0.1:11211\n"
-               "tombstone_lifetime=200s"); // Trailing characters
-
-  MemcachedConfig config;
-  EXPECT_FALSE(_reader->read_config(config));
 }
 
 TEST_F(MemcachedConfigTest, Comments)
