@@ -62,7 +62,7 @@ static void* snmp_thread(void* data)
   return NULL;
 }
 
-static int snmp_get(std::string oid)
+static unsigned int snmp_get(std::string oid)
 {
   // Returns integer value found at that OID.
   std::string command = "snmpget -v2c -Ov -Oq -c clearwater 127.0.0.1:16161 " + oid;
@@ -70,7 +70,7 @@ static int snmp_get(std::string oid)
   FILE* fd = popen(command.c_str(), mode.c_str());
   char buf[1024];
   fgets(buf, sizeof(buf), fd);
-  return atoi(buf);
+  return atol(buf);
 }
 
 static pthread_t thr;
