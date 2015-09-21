@@ -113,6 +113,8 @@ TEST_F(MemcachedConfigTest, TombstoneLifetime)
                "tombstone_lifetime=200");
 
   MemcachedConfig config;
+  // We no longer support tombstone_lifetime as a valid setting in
+  // cluster_settings, so this file should be rejected.
   EXPECT_FALSE(_reader->read_config(config));
 }
 
