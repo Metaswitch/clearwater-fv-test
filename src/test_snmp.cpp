@@ -34,6 +34,8 @@
 
 #include "gtest/gtest.h"
 #include "gmock/gmock.h"
+#include "utils.h"
+
 #include "snmp_event_accumulator_table.h"
 #include "snmp_continuous_accumulator_table.h"
 #include "snmp_counter_table.h"
@@ -65,12 +67,37 @@ static void* snmp_thread(void* data)
 static unsigned int snmp_get(std::string oid)
 {
   // Returns integer value found at that OID.
-  std::string command = "snmpget -v2c -Ov -Oq -c clearwater 127.0.0.1:16161 " + oid;
+  std::string command = "snmpget -v2c -Ovq -c clearwater 127.0.0.1:16161 " + oid;
   std::string mode = "r";
   FILE* fd = popen(command.c_str(), mode.c_str());
   char buf[1024];
   fgets(buf, sizeof(buf), fd);
   return atol(buf);
+}
+
+static std::vector<std::string> snmp_walk(std::string oid)
+{
+  // Returns the results of an snmpwalk performed at that oid as a list of
+  // strings.
+  std::vector<std::string> res;
+  std::string entry;
+
+  std::string command = "snmpwalk -v2c -OQn -c clearwater 127.0.0.1:16161 " + oid;
+  std::string mode = "r";
+  FILE* fd = popen(command.c_str(), mode.c_str());
+  char buf[1024];
+  fgets(buf, sizeof(buf), fd);
+  entry = buf;
+  std::size_t end = entry.find("No more variables left in this MIB View");
+  while (end == std::string::npos)
+  {
+    res.push_back(Utils::rtrim(entry));
+    fgets(buf, sizeof(buf), fd);
+    entry = buf;
+    end = entry.find("No more variables left in this MIB View");
+  }
+
+  return res;
 }
 
 static pthread_t thr;
@@ -120,28 +147,25 @@ TEST_F(SNMPTest, ScalarValue)
   ASSERT_EQ(42, snmp_get(".1.2.2"));
 }
 
-
 TEST_F(SNMPTest, TableOrdering)
 {
   // Create a table
   SNMP::EventAccumulatorTable* tbl = SNMP::EventAccumulatorTable::create("latency", test_oid);
 
   // Shell out to snmpwalk to find all entries in that table
-  FILE* fd = popen("snmpwalk -v2c -On -c clearwater 127.0.0.1:16161 .1.2.2", "r");
-  char buf[1024];
+  std::vector<std::string> entries = snmp_walk(".1.2.2");
 
+  // Check that the table has the right number of entries (3 time periods * five
+  // entries)
+  ASSERT_EQ(15, entries.size());
+  
   // Check that they come in the right order - column 2 of row 1, column 2 of row 2, column 2 of row
   // 3, column 3 of row 1, column 3 of row 2....
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.2.1 = Gauge32: 0\n", buf);
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.2.2 = Gauge32: 0\n", buf);
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.2.3 = Gauge32: 0\n", buf);
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.3.1 = Gauge32: 0\n", buf);
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.3.2 = Gauge32: 0\n", buf);
+  ASSERT_EQ(".1.2.2.1.2.1 = 0", entries[0]);
+  ASSERT_EQ(".1.2.2.1.2.2 = 0", entries[1]);
+  ASSERT_EQ(".1.2.2.1.2.3 = 0", entries[2]);
+  ASSERT_EQ(".1.2.2.1.3.1 = 0", entries[3]);
+  ASSERT_EQ(".1.2.2.1.3.2 = 0", entries[4]);
 
   delete tbl;
 }
@@ -243,11 +267,10 @@ TEST_F(SNMPTest, IPCountTable)
   tbl->get("127.0.0.1")->increment();
   
   // Shell out to snmpwalk to find all entries in that table
-  FILE* fd = popen("snmpwalk -v2c -On -c clearwater 127.0.0.1:16161 .1.2.2", "r");
-  char buf[1024];
-  
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.3.1.4.127.0.0.1 = Gauge32: 1\n", buf);
+  std::vector<std::string> entries = snmp_walk(".1.2.2");
+
+  ASSERT_EQ(1, entries.size());
+  ASSERT_EQ(".1.2.2.1.3.1.4.127.0.0.1 = 1", entries[0]);
   delete tbl;
 }
 
@@ -513,24 +536,21 @@ TEST_F(SNMPTest, CxCounterTable)
   
   // Check that the rows that are there are the ones we expect and that initial
   // values are zero.
-  FILE* fd = popen("snmpwalk -v2c -On -c clearwater 127.0.0.1:16161 .1.2.2", "r");
-  // Check the first base protocol rows.
-  char buf[1024];
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.4.1.0.1001 = Gauge32: 0\n", buf);
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.4.1.0.2001 = Gauge32: 0\n", buf);
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.4.1.0.2002 = Gauge32: 0\n", buf);
+  std::vector<std::string> entries = snmp_walk(".1.2.2");
 
-  fd = popen("snmpwalk -v2c -On -c clearwater 127.0.0.1:16161 .1.2.2.1.4.1.1", "r");
+  // Check that there are the right number of entries in the table (3 time
+  // periods * (33 base result-codes plus 14 3GPP result-codes plus 1 timeout)
+  ASSERT_EQ(144, entries.size());
+
+  // Check the first base protocol rows.
+  ASSERT_EQ(".1.2.2.1.4.1.0.1001 = 0", entries[0]);
+  ASSERT_EQ(".1.2.2.1.4.1.0.2001 = 0", entries[1]);
+  ASSERT_EQ(".1.2.2.1.4.1.0.2002 = 0", entries[2]);
+
   // Check the first 3GPP rows.
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.4.1.1.2001 = Gauge32: 0\n", buf);
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.4.1.1.2002 = Gauge32: 0\n", buf);
-  fgets(buf, sizeof(buf), fd);
-  ASSERT_STREQ(".1.2.2.1.4.1.1.2003 = Gauge32: 0\n", buf);
+  ASSERT_EQ(".1.2.2.1.4.1.1.2001 = 0", entries[33]);
+  ASSERT_EQ(".1.2.2.1.4.1.1.2002 = 0", entries[34]);
+  ASSERT_EQ(".1.2.2.1.4.1.1.2003 = 0", entries[35]);
   
   tbl->increment(SNMP::DiameterAppId::BASE, 2001);
   tbl->increment(SNMP::DiameterAppId::_3GPP, 5011);
