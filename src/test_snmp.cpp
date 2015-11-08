@@ -34,6 +34,8 @@
 
 #include "gtest/gtest.h"
 #include "gmock/gmock.h"
+#include "utils.h"
+
 #include "snmp_event_accumulator_table.h"
 #include "snmp_continuous_accumulator_table.h"
 #include "snmp_counter_table.h"
@@ -89,7 +91,7 @@ static std::vector<std::string> snmp_walk(std::string oid)
   std::size_t end = entry.find("No more variables left in this MIB View");
   while (end == std::string::npos)
   {
-    res.push_back(buf);
+    res.push_back(Utils::rtrim(entry));
     fgets(buf, sizeof(buf), fd);
     entry = buf;
     end = entry.find("No more variables left in this MIB View");
@@ -159,11 +161,11 @@ TEST_F(SNMPTest, TableOrdering)
   
   // Check that they come in the right order - column 2 of row 1, column 2 of row 2, column 2 of row
   // 3, column 3 of row 1, column 3 of row 2....
-  ASSERT_STREQ(".1.2.2.1.2.1 = 0\n", entries[0].c_str());
-  ASSERT_STREQ(".1.2.2.1.2.2 = 0\n", entries[1].c_str());
-  ASSERT_STREQ(".1.2.2.1.2.3 = 0\n", entries[2].c_str());
-  ASSERT_STREQ(".1.2.2.1.3.1 = 0\n", entries[3].c_str());
-  ASSERT_STREQ(".1.2.2.1.3.2 = 0\n", entries[4].c_str());
+  ASSERT_EQ(".1.2.2.1.2.1 = 0", entries[0]);
+  ASSERT_EQ(".1.2.2.1.2.2 = 0", entries[1]);
+  ASSERT_EQ(".1.2.2.1.2.3 = 0", entries[2]);
+  ASSERT_EQ(".1.2.2.1.3.1 = 0", entries[3]);
+  ASSERT_EQ(".1.2.2.1.3.2 = 0", entries[4]);
 
   delete tbl;
 }
@@ -268,7 +270,7 @@ TEST_F(SNMPTest, IPCountTable)
   std::vector<std::string> entries = snmp_walk(".1.2.2");
 
   ASSERT_EQ(1, entries.size());
-  ASSERT_STREQ(".1.2.2.1.3.1.4.127.0.0.1 = 1\n", entries[0].c_str());
+  ASSERT_EQ(".1.2.2.1.3.1.4.127.0.0.1 = 1", entries[0]);
   delete tbl;
 }
 
@@ -541,14 +543,14 @@ TEST_F(SNMPTest, CxCounterTable)
   ASSERT_EQ(144, entries.size());
 
   // Check the first base protocol rows.
-  ASSERT_STREQ(".1.2.2.1.4.1.0.1001 = 0\n", entries[0].c_str());
-  ASSERT_STREQ(".1.2.2.1.4.1.0.2001 = 0\n", entries[1].c_str());
-  ASSERT_STREQ(".1.2.2.1.4.1.0.2002 = 0\n", entries[2].c_str());
+  ASSERT_EQ(".1.2.2.1.4.1.0.1001 = 0", entries[0]);
+  ASSERT_EQ(".1.2.2.1.4.1.0.2001 = 0", entries[1]);
+  ASSERT_EQ(".1.2.2.1.4.1.0.2002 = 0", entries[2]);
 
   // Check the first 3GPP rows.
-  ASSERT_STREQ(".1.2.2.1.4.1.1.2001 = 0\n", entries[33].c_str());
-  ASSERT_STREQ(".1.2.2.1.4.1.1.2002 = 0\n", entries[34].c_str());
-  ASSERT_STREQ(".1.2.2.1.4.1.1.2003 = 0\n", entries[35].c_str());
+  ASSERT_EQ(".1.2.2.1.4.1.1.2001 = 0", entries[33]);
+  ASSERT_EQ(".1.2.2.1.4.1.1.2002 = 0", entries[34]);
+  ASSERT_EQ(".1.2.2.1.4.1.1.2003 = 0", entries[35]);
   
   tbl->increment(SNMP::DiameterAppId::BASE, 2001);
   tbl->increment(SNMP::DiameterAppId::_3GPP, 5011);
