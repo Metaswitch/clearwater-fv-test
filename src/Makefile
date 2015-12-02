@@ -58,9 +58,8 @@ EXTRA_CLEANS += $(TEST_XML) \
 CPPFLAGS += -Wno-write-strings \
             -ggdb3 -std=c++0x
 CPPFLAGS += -I${ROOT}/include \
-            -I${ROOT}/usr/include \
+            -I${ROOT}/modules/astaire/usr/include \
             -I${ROOT}/modules/cpp-common/include \
-            -I${ROOT}/modules/sas-client/include \
             -I${ROOT}/modules/jsoncpp/include \
             -I${ROOT}/modules/rapidjson/include
 
@@ -80,7 +79,7 @@ CPPFLAGS_TEST  += -DUNIT_TEST \
                   -I$(GTEST_DIR)/include -I$(GMOCK_DIR)/include \
                   -I${ROOT}/modules/cpp-common/test_utils
 
-LDFLAGS += -L${ROOT}/usr/lib
+LDFLAGS += -L${ROOT}/modules/astaire/usr/lib
 LDFLAGS += -lmemcached \
            -lsas \
            -lpthread \
@@ -92,7 +91,7 @@ LDFLAGS += -lmemcached \
 
 
 # Test build uses just-built libraries, which may not be installed
-LDFLAGS_TEST += -Wl,-rpath=$(ROOT)/usr/lib
+LDFLAGS_TEST += -Wl,-rpath=$(ROOT)/modules/astaire/usr/lib
 
 # Now the GMock / GTest boilerplate.
 GTEST_HEADERS := $(GTEST_DIR)/include/gtest/*.h \
