@@ -37,7 +37,7 @@
 class AstaireInstance
 {
 public:
-  AstaireInstance(int& port) : _port(port) {};
+  AstaireInstance(int port) : _port(port) {};
 
   bool start_instance();
   bool kill_instance();

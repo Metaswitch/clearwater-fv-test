@@ -38,6 +38,7 @@
 
 #include <unistd.h>
 #include <signal.h>
+#include <cstdio>
 #include <sys/types.h>
 #include <sys/wait.h>
 
@@ -52,13 +53,21 @@ bool AstaireInstance::start_instance()
   if (pid == -1)
   {
     // Failed to fork.
+    perror("fork");
     success = false;
   }
   else if (pid == 0)
   {
     // This is the new process, so start Astaire. execlp only returns if an
     // error has occurred, in which case return false.
-    execlp("astaire", "astaire");
+    execlp("../modules/astaire/build/bin/astaire",
+           "astaire",
+           "--local-name",
+           "127.0.0.1",
+           "--cluster-settings-file",
+           "./cluster_settings",
+           (char*)NULL);
+    perror("execlp");
     success = false;
   }
   else
@@ -83,6 +92,7 @@ bool AstaireInstance::kill_instance()
   else
   {
     // Failed to kill Astaire.
+    perror("kill");
     return false;
   }
 }

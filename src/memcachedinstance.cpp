@@ -39,6 +39,8 @@
 
 #include <unistd.h>
 #include <signal.h>
+#include <cstdio>
+#include <string>
 #include <sys/types.h>
 #include <sys/wait.h>
 
@@ -53,13 +55,22 @@ bool MemcachedInstance::start_instance()
   if (pid == -1)
   {
     // Failed to fork.
+    perror("fork");
     success = false;
   }
   else if (pid == 0)
   {
     // This is the new process, so start memcached. execlp only returns if an
     // error has occurred, in which case return false.
-    execlp("memcached", "-l", "127.0.0.1", "-p", _port);
+    printf("%s", get_current_dir_name());
+    execlp("/usr/bin/memcached",
+           "memcached",
+           "-l",
+           "127.0.0.1",
+           "-p",
+           std::to_string(_port).c_str(),
+           (char*)NULL);
+    perror("execlp");
     success = false;
   }
   else
@@ -84,6 +95,7 @@ bool MemcachedInstance::kill_instance()
   else
   {
     // Failed to kill memcached.
+    perror("kill");
     return false;
   }
 }

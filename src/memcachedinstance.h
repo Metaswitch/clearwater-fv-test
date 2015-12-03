@@ -37,7 +37,7 @@
 class MemcachedInstance
 {
 public:
-  MemcachedInstance(int& port) : _port(port) {};
+  MemcachedInstance(int port) : _port(port) {};
 
   bool start_instance();
   bool kill_instance();

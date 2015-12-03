@@ -37,7 +37,8 @@ TARGET_SOURCES_TEST := memcachedstore.cpp \
                        test_dns.cpp \
                        test_snmp.cpp \
                        memcachedinstance.cpp \
-                       astaireinstance.cpp
+                       astaireinstance.cpp \
+                       test_memcachedsolution.cpp
 
 TARGET_EXTRA_OBJS_TEST := gmock-all.o \
                           gtest-all.o \
@@ -155,11 +156,11 @@ test: run_test vg vg-check
 run_test: build_test | $(TEST_OUT_DIR)
 	rm -f $(TEST_XML)
 	rm -f $(OBJ_DIR_TEST)/*.gcda
-	./fvtest $(TARGET_BIN_TEST) $(EXTRA_TEST_ARGS) --gtest_output=xml:$(TEST_XML)
+	LD_LIBRARY_PATH=../modules/astaire/usr/lib/ ./fvtest $(TARGET_BIN_TEST) $(EXTRA_TEST_ARGS) --gtest_output=xml:$(TEST_XML)
 
 .PHONY: debug
 debug: build_test
-	./fvtest gdb --args $(TARGET_BIN_TEST) $(EXTRA_TEST_ARGS)
+	LD_LIBRARY_PATH=../modules/astaire/usr/lib/ ./fvtest gdb --args $(TARGET_BIN_TEST) $(EXTRA_TEST_ARGS)
 
 # Don't run VG against death tests; they don't play nicely.
 # Be aware that running this will count towards coverage.
@@ -169,7 +170,7 @@ debug: build_test
 # test failure from Jenkins.
 .PHONY: vg
 vg: build_test | $(TEST_OUT_DIR)
-	-./fvtest valgrind --xml=yes --xml-file=$(VG_XML) $(VGFLAGS) \
+	LD_LIBRARY_PATH=../modules/astaire/usr/lib/ ./fvtest valgrind --xml=yes --xml-file=$(VG_XML) $(VGFLAGS) \
 	  $(TARGET_BIN_TEST) --gtest_filter='-*DeathTest*' $(EXTRA_TEST_ARGS) > $(VG_OUT) 2>&1
 
 # Check whether there were any errors from valgrind. Output to screen any errors found,
@@ -190,7 +191,7 @@ vg-check: vg
 
 .PHONY: vg_raw
 vg_raw: build_test | $(TEST_OUT_DIR)
-	-./fvtest valgrind --gen-suppressions=all $(VGFLAGS) \
+	LD_LIBRARY_PATH=../modules/astaire/usr/lib/ ./fvtest valgrind --gen-suppressions=all $(VGFLAGS) \
 	  $(TARGET_BIN_TEST) --gtest_filter='-*DeathTest*' $(EXTRA_TEST_ARGS)
 
 .PHONY: distclean
