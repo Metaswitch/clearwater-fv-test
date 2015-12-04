@@ -1,6 +1,6 @@
 /**
- * @file memcachedinstance.cpp - class for controlling a real memcached
- * instance.
+ * @file processinstance.cpp - class for controlling real instances of
+ * Clearwater processes.
  *
  * Project Clearwater - IMS in the cloud.
  * Copyright (C) 2015  Metaswitch Networks Ltd
@@ -35,7 +35,7 @@
  * as those licenses appear in the file LICENSE-OPENSSL.
  */
 
-#include "memcachedinstance.h"
+#include "processinstance.h"
 
 #include <unistd.h>
 #include <signal.h>
@@ -43,13 +43,15 @@
 #include <string>
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <netdb.h>
+#include <cstring>
 
-/// Start this instance of Memcached.
-bool MemcachedInstance::start_instance()
+/// Start this instance.
+bool ProcessInstance::start_instance()
 {
   bool success;
 
-  // Fork the current process so that we can start a memcached instance.
+  // Fork the current process so that we can start an instance of the process.
   int pid = fork();
 
   if (pid == -1)
@@ -60,18 +62,8 @@ bool MemcachedInstance::start_instance()
   }
   else if (pid == 0)
   {
-    // This is the new process, so start memcached. execlp only returns if an
-    // error has occurred, in which case return false.
-    printf("%s", get_current_dir_name());
-    execlp("/usr/bin/memcached",
-           "memcached",
-           "-l",
-           "127.0.0.1",
-           "-p",
-           std::to_string(_port).c_str(),
-           (char*)NULL);
-    perror("execlp");
-    success = false;
+    // This is the new process, so execute the process.
+    success = execute_process();
   }
   else
   {
@@ -82,8 +74,8 @@ bool MemcachedInstance::start_instance()
   return success;
 }
 
-/// Kill this instance of memcached.
-bool MemcachedInstance::kill_instance()
+/// Kill this instance.
+bool ProcessInstance::kill_instance()
 {
   int status;
 
@@ -94,22 +86,98 @@ bool MemcachedInstance::kill_instance()
   }
   else
   {
-    // Failed to kill memcached.
+    // Failed to kill the instance.
     perror("kill");
     return false;
   }
 }
 
-/// Restart this instance of memcached.
-bool MemcachedInstance::restart_instance()
+/// Restart this instance.
+bool ProcessInstance::restart_instance()
 {
   // Kill and start the instance.
-  bool success = kill_instance();
-  
-  if (success)
+  kill_instance();
+
+  return start_instance();
+}
+
+/// Wait for the instance to come up by trying to connect to the port the
+/// instance listens on.
+bool ProcessInstance::wait_for_instance()
+{
+  struct addrinfo hints, *res;
+  int sockfd;
+  memset(&hints, 0, sizeof hints);
+  hints.ai_family = AF_UNSPEC;
+  hints.ai_socktype = SOCK_STREAM;
+  getaddrinfo("127.0.0.1", std::to_string(_port).c_str(), &hints, &res);
+  sockfd = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
+
+  bool connected = false;
+  int attempts = 0;
+
+  while ((!connected) && (attempts < 5))
   {
-    success = start_instance();
+    if (connect(sockfd, res->ai_addr, res->ai_addrlen) == 0)
+    {
+      connected = true;
+      close(sockfd);
+    }
+    else
+    {
+      sleep(1);
+      attempts++;
+    }
   }
 
-  return success;
+  freeaddrinfo(res);
+
+  return connected;
+}
+
+bool MemcachedInstance::execute_process()
+{
+  // Start memcached. execlp only returns if an error has occurred, in which
+  // case return false.
+  execlp("/usr/bin/memcached",
+         "memcached",
+         "-l",
+         "127.0.0.1",
+         "-p",
+         std::to_string(_port).c_str(),
+         (char*)NULL);
+  perror("execlp");
+  return false;
+}
+
+bool AstaireInstance::execute_process()
+{
+  int log_level = 0;
+  char* val = getenv("NOISY");
+  if ((val != NULL) && (strchr("TtYy", val[0]) != NULL))
+  {
+    if (val != NULL)
+    {
+      val = strchr(val, ':');
+
+      if (val != NULL)
+      {
+        log_level = strtol(val + 1, NULL, 10);
+      }
+    }
+  }
+
+  // Start Astaire. execlp only returns if an error has occurred, in which case
+  // return false.
+  execlp("../modules/astaire/build/bin/astaire",
+         "astaire",
+         "--local-name",
+         "127.0.0.1",
+         "--cluster-settings-file",
+         "./cluster_settings",
+         "--log-level",
+         std::to_string(log_level).c_str(),
+         (char*)NULL);
+  perror("execlp");
+  return false;
 }

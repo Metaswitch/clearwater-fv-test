@@ -38,9 +38,7 @@
 #include "gtest/gtest.h"
 
 #include "memcachedstore.h"
-#include "memcachedinstance.h"
-#include "astaireinstance.h"
-#include "test_interposer.hpp"
+#include "processinstance.h"
 
 #include <vector>
 #include <iostream>
@@ -95,7 +93,15 @@ public:
 
   virtual void TearDown()
   {
+    bool check_instances = wait_for_instances();
+    EXPECT_TRUE(check_instances);
+
     delete _store; _store = NULL;
+  }
+
+  void get_new_key()
+  {
+    _key = std::to_string(_next_key++);
   }
 
   static void create_and_start_memcached_instances(int memcached_instances)
@@ -132,38 +138,35 @@ public:
     }
   }
 
-  static void wait_for_instances()
+  static bool wait_for_instances()
   {
-    for (size_t ii = 0; ii < _memcached_instances.size(); ++ii)
-    {
-      wait_for_instance(BASE_MEMCACHED_PORT + ii);
-    }
+    bool success = true;
 
-    for (size_t ii = 0; ii < _astaire_instances.size(); ++ii)
+    for (std::vector<std::shared_ptr<MemcachedInstance>>::iterator inst = _memcached_instances.begin();
+         inst != _memcached_instances.end();
+         ++inst)
     {
-      wait_for_instance(ASTAIRE_PORT);
-    }
-  }
+      (*inst)->wait_for_instance();
 
-  static void wait_for_instance(int port)
-  {
-    struct addrinfo hints, *res;
-    int sockfd;
-    memset(&hints, 0, sizeof hints);
-    hints.ai_family = AF_UNSPEC;
-    hints.ai_socktype = SOCK_STREAM;
-    getaddrinfo("127.0.0.1", std::to_string(port).c_str(), &hints, &res);
-    sockfd = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
-
-    bool connected = false;
-    while (!connected)
-    {
-      if (connect(sockfd, res->ai_addr, res->ai_addrlen) == 0)
+      if (!success)
       {
-        connected = true;
-        close(sockfd);
+        return success;
       }
     }
+
+    for (std::vector<std::shared_ptr<AstaireInstance>>::iterator inst = _astaire_instances.begin();
+         inst != _astaire_instances.end();
+         ++inst)
+    {
+      (*inst)->wait_for_instance();
+
+      if (!success)
+      {
+        return success;
+      }
+    }
+
+    return success;
   }
 
   Store::Status set_data(std::string& data, uint64_t cas, int expiry = 5)
@@ -223,6 +226,36 @@ std::vector<std::shared_ptr<AstaireInstance>> BaseMemcachedSolutionTest::_astair
 unsigned int BaseMemcachedSolutionTest::_next_key;
 const std::string BaseMemcachedSolutionTest::_table = "test_table";
 
+class MemcachedKiller
+{
+  static void fail_memcached_instance(std::shared_ptr<MemcachedInstance> instance)
+  {
+    instance->kill_instance();
+  }
+
+  static void restore_memcached_instance(std::shared_ptr<MemcachedInstance> instance)
+  {
+    instance->start_instance();
+    instance->wait_for_instance();
+  }
+};
+
+class MemcachedRestarter
+{
+  static void fail_memcached_instance(std::shared_ptr<MemcachedInstance> instance)
+  {
+    instance->restart_instance();
+    instance->wait_for_instance();
+  }
+
+  static void restore_memcached_instance(std::shared_ptr<MemcachedInstance> instance)
+  {
+  }
+};
+
+typedef ::testing::Types<MemcachedKiller, MemcachedRestarter> MemcachedFailHelpers;
+
+template <class T>
 class SimpleMemcachedSolutionTest : public BaseMemcachedSolutionTest
 {
   static void SetUpTestCase()
@@ -230,240 +263,460 @@ class SimpleMemcachedSolutionTest : public BaseMemcachedSolutionTest
     _next_key = std::rand();
     create_and_start_memcached_instances(2);
     create_and_start_astaire_instances(1);
-    wait_for_instances();
+    EXPECT_TRUE(wait_for_instances());
   }
 };
 
-TEST_F(SimpleMemcachedSolutionTest, AddGet)
+TYPED_TEST_CASE(SimpleMemcachedSolutionTest, MemcachedFailHelpers);
+
+TYPED_TEST(SimpleMemcachedSolutionTest, AddGet)
 {
   uint64_t cas = 0;
   Store::Status rc;
   std::string data_in = "SimpleMemcachedSolutionTest.AddGet";
   std::string data_out;
 
-  rc = set_data(data_in, cas);
+  rc = this->set_data(data_in, cas);
   EXPECT_EQ(Store::Status::OK, rc);
 
-  rc = get_data(data_out, cas);
+  rc = this->get_data(data_out, cas);
   EXPECT_EQ(Store::Status::OK, rc);
   EXPECT_EQ(data_out, data_in);
 }
 
-TEST_F(SimpleMemcachedSolutionTest, AddGetTwoKeys)
+TYPED_TEST(SimpleMemcachedSolutionTest, AddGetTwoKeys)
 {
   uint64_t cas1 = 0;
   uint64_t cas2 = 0;
   Store::Status rc;
-  std::string key1 = _key;
-  _key = std::to_string(_next_key++);
-  std::string key2 = _key;
+  std::string key1 = this->_key;
+  this->get_new_key();
+  std::string key2 = this->_key;
   std::string data_in1 = "SimpleMemcachedSolutionTest.AddGetTwoKeys1";
   std::string data_in2 = "SimpleMemcachedSolutionTest.AddGetTwoKeys2";
   std::string data_out1;
   std::string data_out2;
 
-  rc = set_data(key1, data_in1, cas1);
+  rc = this->set_data(key1, data_in1, cas1);
   EXPECT_EQ(Store::Status::OK, rc);
-  rc = set_data(key2, data_in2, cas2);
+  rc = this->set_data(key2, data_in2, cas2);
   EXPECT_EQ(Store::Status::OK, rc);
 
-  rc = get_data(key1, data_out1, cas1);
+  rc = this->get_data(key1, data_out1, cas1);
   EXPECT_EQ(Store::Status::OK, rc);
   EXPECT_EQ(data_out1, data_in1);
-  rc = get_data(key2, data_out2, cas2);
+  rc = this->get_data(key2, data_out2, cas2);
   EXPECT_EQ(Store::Status::OK, rc);
   EXPECT_EQ(data_out2, data_in2);
 }
 
-TEST_F(SimpleMemcachedSolutionTest, AddGetExpire)
+TYPED_TEST(SimpleMemcachedSolutionTest, AddGetExpire)
 {
   uint64_t cas = 0;
   Store::Status rc;
   std::string data_in = "SimpleMemcachedSolutionTest.AddGetExpire";
   std::string data_out;
 
-  rc = set_data(data_in, cas, 1);
+  rc = this->set_data(data_in, cas, 1);
   EXPECT_EQ(Store::Status::OK, rc);
 
-  rc = get_data(data_out, cas);
+  rc = this->get_data(data_out, cas);
   EXPECT_EQ(Store::Status::OK, rc);
   EXPECT_EQ(data_out, data_in);
 
-  sleep(1);
+  sleep(2);
 
-  rc = get_data(data_out, cas);
+  rc = this->get_data(data_out, cas);
   EXPECT_EQ(Store::Status::NOT_FOUND, rc);
-
-  cwtest_reset_time();
 }
 
-TEST_F(SimpleMemcachedSolutionTest, AddSetSetDataContentionSet)
+TYPED_TEST(SimpleMemcachedSolutionTest, AddSetSetDataContentionSet)
 {
   uint64_t cas = 0;
   Store::Status rc;
   std::string data_in = "SimpleMemcachedSolutionTest.AddSetSetDataContentionSet";
   std::string data_out;
 
-  rc = set_data(data_in, cas);
+  rc = this->set_data(data_in, cas);
   EXPECT_EQ(Store::Status::OK, rc);
 
-  rc = get_data(data_out, cas);
+  rc = this->get_data(data_out, cas);
   EXPECT_EQ(Store::Status::OK, rc);
   EXPECT_EQ(data_out, data_in);
 
   data_in = "SimpleMemcachedSolutionTest.AddSetSetDataContentionSet_New1";
-  rc = set_data(data_in, cas);
+  rc = this->set_data(data_in, cas);
   EXPECT_EQ(Store::Status::OK, rc);
 
   std::string failed_data_in = "FAIL";
-  rc = set_data(data_in, cas);
+  rc = this->set_data(data_in, cas);
   EXPECT_EQ(Store::Status::DATA_CONTENTION, rc);
 
-  rc = get_data(data_out, cas);
+  rc = this->get_data(data_out, cas);
   EXPECT_EQ(Store::Status::OK, rc);
   EXPECT_EQ(data_out, data_in);
 
   data_in = "SimpleMemcachedSolutionTest.AddSetSetDataContentionSet_New2";
-  rc = set_data(data_in, cas);
+  rc = this->set_data(data_in, cas);
   EXPECT_EQ(Store::Status::OK, rc);
 
-  rc = get_data(data_out, cas);
+  rc = this->get_data(data_out, cas);
   EXPECT_EQ(Store::Status::OK, rc);
   EXPECT_EQ(data_out, data_in);
 }
 
-TEST_F(SimpleMemcachedSolutionTest, AddSetCASDeleteDataContentionCASDelete)
+TYPED_TEST(SimpleMemcachedSolutionTest, AddSetCASDeleteDataContentionCASDelete)
 {
   uint64_t cas = 0;
   Store::Status rc;
   std::string data_in = "SimpleMemcachedSolutionTest.AddSetCASDeleteDataContentionCASDelete";
   std::string data_out;
 
-  rc = set_data(data_in, cas);
+  rc = this->set_data(data_in, cas);
   EXPECT_EQ(Store::Status::OK, rc);
 
-  rc = get_data(data_out, cas);
+  rc = this->get_data(data_out, cas);
   EXPECT_EQ(Store::Status::OK, rc);
   EXPECT_EQ(data_out, data_in);
 
   data_in = "SimpleMemcachedSolutionTest.AddSetCASDeleteDataContentionCASDelete_New";
-  rc = set_data(data_in, cas);
+  rc = this->set_data(data_in, cas);
   EXPECT_EQ(Store::Status::OK, rc);
 
   std::string failed_data_in = "FAIL";
-  rc = set_data(data_in, cas, 0);
+  rc = this->set_data(data_in, cas, 0);
   EXPECT_EQ(Store::Status::DATA_CONTENTION, rc);
 
-  rc = get_data(data_out, cas);
+  rc = this->get_data(data_out, cas);
   EXPECT_EQ(Store::Status::OK, rc);
   EXPECT_EQ(data_out, data_in);
 
   data_in = "DELETE";
-  rc = set_data(data_in, cas, 0);
+  rc = this->set_data(data_in, cas, 0);
   EXPECT_EQ(Store::Status::OK, rc);
 
-  rc = get_data(data_out, cas);
+  rc = this->get_data(data_out, cas);
   EXPECT_EQ(Store::Status::NOT_FOUND, rc);
 }
 
-TEST_F(SimpleMemcachedSolutionTest, AddAddDataContention)
+TYPED_TEST(SimpleMemcachedSolutionTest, AddAddDataContention)
 {
   uint64_t cas = 0;
   Store::Status rc;
   std::string data_in = "SimpleMemcachedSolutionTest.AddAddDataContention";
   std::string data_out;
 
-  rc = set_data(data_in, cas);
+  rc = this->set_data(data_in, cas);
   EXPECT_EQ(Store::Status::OK, rc);
 
   std::string new_data_in = "SimpleMemcachedSolutionTest.AddAddDataContention_New";
   uint64_t new_cas = 0;
-  rc = set_data(new_data_in, new_cas);
+  rc = this->set_data(new_data_in, new_cas);
   EXPECT_EQ(Store::Status::DATA_CONTENTION, rc);
 
-  rc = get_data(data_out, cas);
+  rc = this->get_data(data_out, cas);
   EXPECT_EQ(Store::Status::OK, rc);
   EXPECT_EQ(data_out, data_in);
 }
 
-TEST_F(SimpleMemcachedSolutionTest, AddDelete)
+TYPED_TEST(SimpleMemcachedSolutionTest, AddDelete)
 {
   uint64_t cas = 0;
   Store::Status rc;
   std::string data_in = "SimpleMemcachedSolutionTest.AddDelete";
   std::string data_out;
 
-  rc = set_data(data_in, cas);
+  rc = this->set_data(data_in, cas);
   EXPECT_EQ(Store::Status::OK, rc);
 
-  rc = get_data(data_out, cas);
+  rc = this->get_data(data_out, cas);
   EXPECT_EQ(Store::Status::OK, rc);
   EXPECT_EQ(data_out, data_in);
 
-  rc = delete_data();
+  rc = this->delete_data();
   EXPECT_EQ(Store::Status::OK, rc);
 
-  rc = get_data(data_out, cas);
+  rc = this->get_data(data_out, cas);
   EXPECT_EQ(Store::Status::NOT_FOUND, rc);
 }
 
-TEST_F(SimpleMemcachedSolutionTest, Delete)
+TYPED_TEST(SimpleMemcachedSolutionTest, Delete)
 {
   Store::Status rc;
-  rc = delete_data();
+  rc = this->delete_data();
   EXPECT_EQ(Store::Status::OK, rc);
 }
 
-TEST_F(SimpleMemcachedSolutionTest, AddDeleteAdd)
+TYPED_TEST(SimpleMemcachedSolutionTest, AddDeleteAdd)
 {
   uint64_t cas = 0;
   Store::Status rc;
   std::string data_in = "SimpleMemcachedSolutionTest.AddDeleteAdd";
   std::string data_out;
 
-  rc = set_data(data_in, cas);
+  rc = this->set_data(data_in, cas);
   EXPECT_EQ(Store::Status::OK, rc);
 
-  rc = get_data(data_out, cas);
+  rc = this->get_data(data_out, cas);
   EXPECT_EQ(Store::Status::OK, rc);
   EXPECT_EQ(data_out, data_in);
 
-  rc = delete_data();
+  rc = this->delete_data();
   EXPECT_EQ(Store::Status::OK, rc);
 
-  rc = get_data(data_out, cas);
+  rc = this->get_data(data_out, cas);
   EXPECT_EQ(Store::Status::NOT_FOUND, rc);
 
-  rc = set_data(data_in, cas);
+  rc = this->set_data(data_in, cas);
   EXPECT_EQ(Store::Status::OK, rc);
 
-  rc = get_data(data_out, cas);
+  rc = this->get_data(data_out, cas);
   EXPECT_EQ(Store::Status::OK, rc);
   EXPECT_EQ(data_out, data_in);
 }
 
-TEST_F(SimpleMemcachedSolutionTest, AddDeleteSetDataContention)
+TYPED_TEST(SimpleMemcachedSolutionTest, AddDeleteSetDataContention)
 {
   uint64_t cas = 0;
   Store::Status rc;
   std::string data_in = "SimpleMemcachedSolutionTest.AddDeleteSetDataContention";
   std::string data_out;
 
-  rc = set_data(data_in, cas);
+  rc = this->set_data(data_in, cas);
   EXPECT_EQ(Store::Status::OK, rc);
 
-  rc = get_data(data_out, cas);
+  rc = this->get_data(data_out, cas);
   EXPECT_EQ(Store::Status::OK, rc);
   EXPECT_EQ(data_out, data_in);
 
-  rc = delete_data();
+  rc = this->delete_data();
   EXPECT_EQ(Store::Status::OK, rc);
 
   data_in = "SimpleMemcachedSolutionTest.AddDeleteSetDataContention_New";
-  rc = set_data(data_in, cas);
+  rc = this->set_data(data_in, cas);
   EXPECT_EQ(Store::Status::DATA_CONTENTION, rc);
 }
 
+TYPED_TEST(SimpleMemcachedSolutionTest, KillAddGet)
+{
+  TypeParam::fail_memcached_instance(this->_memcached_instances.back());
+
+  uint64_t cas = 0;
+  Store::Status rc;
+  std::string data_in = "SimpleMemcachedSolutionTest.KillAddGet";
+  std::string data_out;
+
+  rc = this->set_data(data_in, cas);
+  EXPECT_EQ(Store::Status::OK, rc);
+
+  rc = this->get_data(data_out, cas);
+  EXPECT_EQ(Store::Status::OK, rc);
+  EXPECT_EQ(data_out, data_in);
+
+  TypeParam::restore_memcached_instance(this->_memcached_instances.back());
+}
+
+TYPED_TEST(SimpleMemcachedSolutionTest, AddKillGet)
+{
+  uint64_t cas = 0;
+  Store::Status rc;
+  std::string data_in = "SimpleMemcachedSolutionTest.AddKillGet";
+  std::string data_out;
+
+  rc = this->set_data(data_in, cas);
+  EXPECT_EQ(Store::Status::OK, rc);
+
+  TypeParam::fail_memcached_instance(this->_memcached_instances.back());
+
+  rc = this->get_data(data_out, cas);
+  EXPECT_EQ(Store::Status::OK, rc);
+  EXPECT_EQ(data_out, data_in);
+
+  TypeParam::restore_memcached_instance(this->_memcached_instances.back());
+}
+
+TYPED_TEST(SimpleMemcachedSolutionTest, AddKillGetExpire)
+{
+  uint64_t cas = 0;
+  Store::Status rc;
+  std::string data_in = "SimpleMemcachedSolutionTest.AddKillGetExpire";
+  std::string data_out;
+
+  rc = this->set_data(data_in, cas, 1);
+  EXPECT_EQ(Store::Status::OK, rc);
+
+  TypeParam::fail_memcached_instance(this->_memcached_instances.back());
+
+  sleep(2);
+
+  rc = this->get_data(data_out, cas);
+  EXPECT_EQ(Store::Status::NOT_FOUND, rc);
+
+  TypeParam::restore_memcached_instance(this->_memcached_instances.back());
+}
+
+TYPED_TEST(SimpleMemcachedSolutionTest, AddKillSetSetDataContentionSet)
+{
+  for (int ii = 0; ii < 10; ++ii)
+  {
+    this->get_new_key();
+
+    uint64_t cas = 0;
+    Store::Status rc;
+    std::string data_in = "SimpleMemcachedSolutionTest.AddKillSetSetDataContentionSet";
+    std::string data_out;
+
+    rc = this->set_data(data_in, cas);
+    EXPECT_EQ(Store::Status::OK, rc);
+
+    rc = this->get_data(data_out, cas);
+    EXPECT_EQ(Store::Status::OK, rc);
+    EXPECT_EQ(data_out, data_in);
+
+    TypeParam::fail_memcached_instance(this->_memcached_instances.back());
+
+    data_in = "SimpleMemcachedSolutionTest.AddKillSetSetDataContentionSet_New1";
+    rc = this->set_data(data_in, cas);
+
+    if (rc == Store::Status::DATA_CONTENTION)
+    {
+      rc = this->get_data(data_out, cas);
+      EXPECT_EQ(Store::Status::OK, rc);
+
+      rc = this->set_data(data_in, cas, 0);
+      EXPECT_EQ(Store::Status::OK, rc);
+    }
+    else if (rc == Store::Status::OK)
+    {
+      std::string failed_data_in = "FAIL";
+      rc = this->set_data(data_in, cas);
+      EXPECT_EQ(Store::Status::DATA_CONTENTION, rc);
+
+      rc = this->get_data(data_out, cas);
+      EXPECT_EQ(Store::Status::OK, rc);
+      EXPECT_EQ(data_out, data_in);
+
+      data_in = "SimpleMemcachedSolutionTest.AddKillSetSetDataContentionSet_New2";
+      rc = this->set_data(data_in, cas);
+      EXPECT_EQ(Store::Status::OK, rc);
+
+      rc = this->get_data(data_out, cas);
+      EXPECT_EQ(Store::Status::OK, rc);
+      EXPECT_EQ(data_out, data_in);
+    }
+    else
+    {
+      EXPECT_TRUE(false);
+    }
+
+    TypeParam::restore_memcached_instance(this->_memcached_instances.back());
+  }
+}
+
+TYPED_TEST(SimpleMemcachedSolutionTest, AddDeleteKill)
+{
+  uint64_t cas = 0;
+  Store::Status rc;
+  std::string data_in = "SimpleMemcachedSolutionTest.AddDeleteKill";
+  std::string data_out;
+
+  rc = this->set_data(data_in, cas);
+  EXPECT_EQ(Store::Status::OK, rc);
+
+  rc = this->get_data(data_out, cas);
+  EXPECT_EQ(Store::Status::OK, rc);
+  EXPECT_EQ(data_out, data_in);
+
+  rc = this->delete_data();
+  EXPECT_EQ(Store::Status::OK, rc);
+
+  TypeParam::fail_memcached_instance(this->_memcached_instances.back());
+
+  rc = this->get_data(data_out, cas);
+  EXPECT_EQ(Store::Status::NOT_FOUND, rc);
+
+  TypeParam::restore_memcached_instance(this->_memcached_instances.back());
+}
+
+TYPED_TEST(SimpleMemcachedSolutionTest, AddKillCASDelete)
+{
+  uint64_t cas = 0;
+  Store::Status rc;
+  std::string data_in = "SimpleMemcachedSolutionTest.AddKillCASDelete";
+  std::string data_out;
+
+  rc = this->set_data(data_in, cas);
+  EXPECT_EQ(Store::Status::OK, rc);
+
+  TypeParam::fail_memcached_instance(this->_memcached_instances.back());
+
+  rc = this->get_data(data_out, cas);
+  EXPECT_EQ(Store::Status::OK, rc);
+  EXPECT_EQ(data_out, data_in);
+
+  data_in = "DELETE";
+  rc = this->set_data(data_in, cas, 0);
+
+  if (rc == Store::Status::ERROR)
+  {
+    rc = this->get_data(data_out, cas);
+    EXPECT_EQ(Store::Status::OK, rc);
+
+    rc = this->set_data(data_in, cas, 0);
+    EXPECT_EQ(Store::Status::OK, rc);
+  }
+  else if (rc != Store::Status::OK)
+  {
+    EXPECT_TRUE(false);
+  }
+
+  rc = this->get_data(data_out, cas);
+  EXPECT_EQ(Store::Status::NOT_FOUND, rc);
+
+  TypeParam::restore_memcached_instance(this->_memcached_instances.back());
+}
+
+TYPED_TEST(SimpleMemcachedSolutionTest, AddGetKillSet)
+{
+  for (int ii = 0; ii < 10; ++ii)
+  {
+    this->get_new_key();
+
+    uint64_t cas = 0;
+    Store::Status rc;
+    std::string data_in = "SimpleMemcachedSolutionTest.AddGetKillSet";
+    std::string data_out;
+
+    rc = this->set_data(data_in, cas);
+    EXPECT_EQ(Store::Status::OK, rc);
+
+    rc = this->get_data(data_out, cas);
+    EXPECT_EQ(Store::Status::OK, rc);
+    EXPECT_EQ(data_out, data_in);
+
+    TypeParam::fail_memcached_instance(this->_memcached_instances.back());
+
+    data_in = "SimpleMemcachedSolutionTest.AddGetKillSet_New";
+    rc = this->set_data(data_in, cas);
+
+    if (rc == Store::Status::DATA_CONTENTION)
+    {
+      rc = this->get_data(data_out, cas);
+      EXPECT_EQ(Store::Status::OK, rc);
+
+      rc = this->set_data(data_in, cas);
+      EXPECT_EQ(Store::Status::OK, rc);
+    }
+    else if (rc != Store::Status::OK)
+    {
+      EXPECT_TRUE(false);
+    }
+
+    TypeParam::restore_memcached_instance(this->_memcached_instances.back());
+  }
+}
+
+template <class T>
 class LargerClustersMemcachedSolutionTest : public BaseMemcachedSolutionTest
 {
   static void SetUpTestCase()
@@ -471,21 +724,69 @@ class LargerClustersMemcachedSolutionTest : public BaseMemcachedSolutionTest
     _next_key = std::rand();
     create_and_start_memcached_instances(3);
     create_and_start_astaire_instances(1);
-    wait_for_instances();
+    EXPECT_TRUE(wait_for_instances());
   }
 };
 
-TEST_F(LargerClustersMemcachedSolutionTest, AddGet)
+TYPED_TEST_CASE(LargerClustersMemcachedSolutionTest, MemcachedFailHelpers);
+
+TYPED_TEST(LargerClustersMemcachedSolutionTest, AddGet)
 {
   uint64_t cas = 0;
   Store::Status rc;
   std::string data_in = "LargerClustersMemcachedSolutionTest.AddGet";
   std::string data_out;
 
-  rc = set_data(data_in, cas);
+  rc = this->set_data(data_in, cas);
   EXPECT_EQ(Store::Status::OK, rc);
 
-  rc = get_data(data_out, cas);
+  rc = this->get_data(data_out, cas);
   EXPECT_EQ(Store::Status::OK, rc);
   EXPECT_EQ(data_out, data_in);
+}
+
+TYPED_TEST(LargerClustersMemcachedSolutionTest, AddKillGet)
+{
+  uint64_t cas = 0;
+  Store::Status rc;
+  std::string data_in = "LargerClustersMemcachedSolutionTest.AddKillGet";
+  std::string data_out;
+
+  rc = this->set_data(data_in, cas);
+  EXPECT_EQ(Store::Status::OK, rc);
+
+  TypeParam::fail_memcached_instance(this->_memcached_instances.back());
+
+  rc = this->get_data(data_out, cas);
+  EXPECT_EQ(Store::Status::OK, rc);
+  EXPECT_EQ(data_out, data_in);
+
+  TypeParam::restore_memcached_instance(this->_memcached_instances.back());
+}
+
+TYPED_TEST(LargerClustersMemcachedSolutionTest, AddKillGetSet)
+{
+  uint64_t cas = 0;
+  Store::Status rc;
+  std::string data_in = "LargerClustersMemcachedSolutionTest.AddKillGetSet";
+  std::string data_out;
+
+  rc = this->set_data(data_in, cas);
+  EXPECT_EQ(Store::Status::OK, rc);
+
+  TypeParam::fail_memcached_instance(this->_memcached_instances.back());
+
+  rc = this->get_data(data_out, cas);
+  EXPECT_EQ(Store::Status::OK, rc);
+  EXPECT_EQ(data_out, data_in);
+
+  data_in = "LargerClustersMemcachedSolutionTest.AddKillGetSet_New";
+  rc = this->set_data(data_in, cas);
+  EXPECT_EQ(Store::Status::OK, rc);
+
+  rc = this->get_data(data_out, cas);
+  EXPECT_EQ(Store::Status::OK, rc);
+  EXPECT_EQ(data_out, data_in);
+
+  TypeParam::restore_memcached_instance(this->_memcached_instances.back());
 }

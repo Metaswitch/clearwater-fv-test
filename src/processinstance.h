@@ -1,5 +1,6 @@
 /**
- * @file memcachedinstance.h - class for controlling a real memcached instance.
+ * @file processinstance.h - class for controlling real instances of Clearwater
+ * processes.
  *
  * Project Clearwater - IMS in the cloud.
  * Copyright (C) 2015  Metaswitch Networks Ltd
@@ -34,16 +35,33 @@
  * as those licenses appear in the file LICENSE-OPENSSL.
  */
 
-class MemcachedInstance
+class ProcessInstance
 {
 public:
-  MemcachedInstance(int port) : _port(port) {};
+  ProcessInstance(int port) : _port(port) {};
 
   bool start_instance();
   bool kill_instance();
   bool restart_instance();
+  bool wait_for_instance();
 
 private:
+  virtual bool execute_process() = 0;
+
   int _port;
   int _pid;
+};
+
+class MemcachedInstance : public ProcessInstance
+{
+public:
+  MemcachedInstance(int port) : ProcessInstance(port) {};
+  virtual bool execute_process();
+};
+
+class AstaireInstance : public ProcessInstance
+{
+public:
+  AstaireInstance(int port) : ProcessInstance(port) {};
+  virtual bool execute_process();
 };
