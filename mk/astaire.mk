@@ -1,4 +1,4 @@
-# included mk file for astaire
+# mk file for astaire.
 
 ASTAIRE_DIR := ${MODULE_DIR}/astaire
 
