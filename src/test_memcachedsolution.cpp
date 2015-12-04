@@ -726,6 +726,7 @@ TYPED_TEST(SimpleMemcachedSolutionTest, AddKillCASDelete)
   data_in = "DELETE";
   rc = this->set_data(data_in, cas, 0);
 
+  // TODO: Why is this an ERROR rather than DATA_CONTENTION?
   if (rc == Store::Status::ERROR)
   {
     rc = this->get_data(data_out, cas);
