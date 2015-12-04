@@ -61,9 +61,7 @@ CPPFLAGS += -Wno-write-strings \
             -ggdb3 -std=c++0x
 CPPFLAGS += -I${ROOT}/include \
             -I${ROOT}/modules/astaire/usr/include \
-            -I${ROOT}/modules/cpp-common/include \
-            -I${ROOT}/modules/jsoncpp/include \
-            -I${ROOT}/modules/rapidjson/include
+            -I${ROOT}/modules/cpp-common/include
 
 # Add cpp-common/src as a VPATH to pull in required production code
 VPATH := ${ROOT}/modules/cpp-common/src

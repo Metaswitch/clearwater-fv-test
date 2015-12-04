@@ -102,7 +102,7 @@ bool ProcessInstance::restart_instance()
 }
 
 /// Wait for the instance to come up by trying to connect to the port the
-/// instance listens on.
+/// instance listens on. We currently run everything on 127.0.0.1.
 bool ProcessInstance::wait_for_instance()
 {
   struct addrinfo hints, *res;
@@ -116,6 +116,7 @@ bool ProcessInstance::wait_for_instance()
   bool connected = false;
   int attempts = 0;
 
+  // If the process hasn't come up after 5 seconds, call the whole thing off.
   while ((!connected) && (attempts < 5))
   {
     if (connect(sockfd, res->ai_addr, res->ai_addrlen) == 0)
@@ -152,6 +153,8 @@ bool MemcachedInstance::execute_process()
 
 bool AstaireInstance::execute_process()
 {
+  // Run Astaire at the same log level as the tests by parsing the NOISY=t:?
+  // environment variable.
   int log_level = 0;
   char* val = getenv("NOISY");
   if ((val != NULL) && (strchr("TtYy", val[0]) != NULL))
@@ -168,7 +171,7 @@ bool AstaireInstance::execute_process()
   }
 
   // Start Astaire. execlp only returns if an error has occurred, in which case
-  // return false.
+  // return false. This assumes that cluster_settings has been setup.
   execlp("../modules/astaire/build/bin/astaire",
          "astaire",
          "--local-name",
