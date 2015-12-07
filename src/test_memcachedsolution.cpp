@@ -726,8 +726,18 @@ TYPED_TEST(SimpleMemcachedSolutionTest, AddKillCASDelete)
   data_in = "DELETE";
   rc = this->set_data(data_in, cas, 0);
 
-  // TODO: Why is this an ERROR rather than DATA_CONTENTION?
-  if (rc == Store::Status::ERROR)
+  // TODO: We should never receive DATA_CONTENTION here - we only do so because
+  // of https://github.com/Metaswitch/cpp-common/issues/286. This testcase
+  // should be updated once that is fixed. However, this is actually not that
+  // bad since from the client's point of view this could easily be business as
+  // usual.
+  //
+  // Why does cpp-common issue 286 result in data contention here? In the case
+  // where we restart a memcached, and it's the primary memcached, the GET to
+  // the primary memcached still fails with a CONNECTION FAILURE (even though
+  // the memcached is back up). However, the SET would now work fine, apart from
+  // the fact that we're using the wrong CAS - hence the data contention.
+  if (rc == Store::Status::DATA_CONTENTION)
   {
     rc = this->get_data(data_out, cas);
     EXPECT_EQ(Store::Status::OK, rc);
@@ -822,8 +832,18 @@ TYPED_TEST(LargerClustersMemcachedSolutionTest, AddKillGetSet)
   data_in = "LargerClustersMemcachedSolutionTest.AddKillGetSet_New";
   rc = this->set_data(data_in, cas);
 
-  // TODO: Why is this an ERROR rather than DATA_CONTENTION?
-  if (rc == Store::Status::ERROR)
+  // TODO: We should never receive DATA_CONTENTION here - we only do so because
+  // of https://github.com/Metaswitch/cpp-common/issues/286. This testcase
+  // should be updated once that is fixed. However, this is actually not that
+  // bad since from the client's point of view this could easily be business as
+  // usual.
+  //
+  // Why does cpp-common issue 286 result in data contention here? In the case
+  // where we restart a memcached, and it's the primary memcached, the GET to
+  // the primary memcached still fails with a CONNECTION FAILURE (even though
+  // the memcached is back up). However, the SET would now work fine, apart from
+  // the fact that we're using the wrong CAS - hence the data contention.
+  if (rc == Store::Status::DATA_CONTENTION)
   {
     rc = this->get_data(data_out, cas);
     EXPECT_EQ(Store::Status::OK, rc);
