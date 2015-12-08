@@ -24,11 +24,9 @@ test: ${SUBMODULES} fvtest_test
 testall: $(patsubst %, %_test, ${SUBMODULES}) test
 
 clean: $(patsubst %, %_clean, ${SUBMODULES}) fvtest_clean
-	rm -rf ${ROOT}/usr
 	rm -rf ${ROOT}/build
 
 distclean: $(patsubst %, %_distclean, ${SUBMODULES}) fvtest_distclean
-	rm -rf ${ROOT}/usr
 	rm -rf ${ROOT}/build
 
 .PHONY: all build test clean distclean

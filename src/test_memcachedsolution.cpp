@@ -49,6 +49,8 @@ static const SAS::TrailId DUMMY_TRAIL_ID = 0x12345678;
 static const int BASE_MEMCACHED_PORT = 33333;
 static const int ASTAIRE_PORT = 11311;
 
+void signal_handler(int signal);
+
 // Fixture for all memcached solution tests.
 //
 // This fixture:
@@ -61,24 +63,23 @@ static const int ASTAIRE_PORT = 11311;
 class BaseMemcachedSolutionTest : public ::testing::Test
 {
 public:
-  /// Kill and clear all the memcached and Astaire instances, and remove the
+  /// Register the signal handler to tidy up if we crash and set _key to a
+  /// random number.
+  static void SetUpTestCase()
+  {
+    signal(SIGSEGV, signal_handler);
+
+    _next_key = std::rand();
+  }
+
+  /// Clear all the memcached and Astaire instances. This calls their
+  /// destructors which will kill the underlying processes. Also remove the
   /// cluster_settings file.
   static void TearDownTestCase()
   {
-    for (std::vector<std::shared_ptr<MemcachedInstance>>::iterator inst = _memcached_instances.begin();
-         inst != _memcached_instances.end();
-         ++inst)
-    {
-      (*inst)->kill_instance();
-    }
-    _memcached_instances.clear();
+    signal(SIGSEGV, SIG_DFL);
 
-    for (std::vector<std::shared_ptr<AstaireInstance>>::iterator inst = _astaire_instances.begin();
-         inst != _astaire_instances.end();
-         ++inst)
-    {
-      (*inst)->kill_instance();
-    }
+    _memcached_instances.clear();
     _astaire_instances.clear();
 
     if (remove("cluster_settings") != 0)
@@ -87,7 +88,10 @@ public:
     }
   }
 
-  /// Create a new store and a new unique key for this test.
+  /// Create a new store and a new unique key for this test. Also make sure that
+  /// all of the memcached and Astaire instances are running before starting the
+  /// new test. Any killed instances should be restarted at the end of the
+  /// previous test, and the new test will assume this.
   virtual void SetUp()
   {
     _store = new TopologyNeutralMemcachedStore();
@@ -95,14 +99,13 @@ public:
     // Create a new key for every test (to prevent tests from interacting with
     // each other).
     _key = std::to_string(_next_key++);
+
+    // Ensure all our instances are running.
+    EXPECT_TRUE(wait_for_instances());
   }
 
-  /// Make sure all the memcached and Astaire instances are running before
-  /// starting finishing the test.
   virtual void TearDown()
   {
-    EXPECT_TRUE(wait_for_instances());
-
     delete _store; _store = NULL;
   }
 
@@ -256,6 +259,22 @@ std::vector<std::shared_ptr<AstaireInstance>> BaseMemcachedSolutionTest::_astair
 unsigned int BaseMemcachedSolutionTest::_next_key;
 const std::string BaseMemcachedSolutionTest::_table = "test_table";
 
+/// Clear all the memcached and Astaire instances. This calls their
+/// destructors which will kill the underlying processes. Also remove the
+/// cluster_settings file.
+void signal_handler(int sig)
+{
+  signal(SIGSEGV, SIG_DFL);
+
+  BaseMemcachedSolutionTest::_memcached_instances.clear();
+  BaseMemcachedSolutionTest::_astaire_instances.clear();
+
+  if (remove("cluster_settings") != 0)
+  {
+    perror("remove cluster_settings");
+  }
+}
+
 /// A class for killing and restoring a memcached instance. Used as a template
 /// along with MemcachedRestarter in the tests below.
 class MemcachedKiller
@@ -297,14 +316,20 @@ class SimpleMemcachedSolutionTest : public BaseMemcachedSolutionTest
 {
   static void SetUpTestCase()
   {
-    _next_key = std::rand();
     create_and_start_memcached_instances(2);
     create_and_start_astaire_instances(1);
-    EXPECT_TRUE(wait_for_instances());
+
+    BaseMemcachedSolutionTest::SetUpTestCase();
   }
 };
 
 TYPED_TEST_CASE(SimpleMemcachedSolutionTest, MemcachedFailHelpers);
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// SimpleMemcachedSolutionTest testcases start here.
+///
+////////////////////////////////////////////////////////////////////////////////
 
 /// Add a key and retrieve it.
 TYPED_TEST(SimpleMemcachedSolutionTest, AddGet)
@@ -408,8 +433,8 @@ TYPED_TEST(SimpleMemcachedSolutionTest, AddSetSetDataContentionSet)
 }
 
 /// Add a key and retrieve it. Try to update the key with a new value and also
-/// to update it with an expiry of 0. The delete update fails due to data
-/// contention. Try it again and check the key has gone.
+/// to update it with an expiry of 0. The update fails due to data contention.
+/// Try it again and check the key has gone.
 TYPED_TEST(SimpleMemcachedSolutionTest, AddSetCASDeleteDataContentionCASDelete)
 {
   uint64_t cas = 0;
@@ -640,13 +665,15 @@ TYPED_TEST(SimpleMemcachedSolutionTest, AddKillSetSetDataContentionSet)
 
     data_in = "SimpleMemcachedSolutionTest.AddKillSetSetDataContentionSet_New1";
     rc = this->set_data(data_in, cas);
+    EXPECT_TRUE((rc == Store::Status::DATA_CONTENTION) ||
+                (rc == Store::Status::OK));
 
     if (rc == Store::Status::DATA_CONTENTION)
     {
       rc = this->get_data(data_out, cas);
       EXPECT_EQ(Store::Status::OK, rc);
 
-      rc = this->set_data(data_in, cas, 0);
+      rc = this->set_data(data_in, cas);
       EXPECT_EQ(Store::Status::OK, rc);
     }
     else if (rc == Store::Status::OK)
@@ -666,10 +693,6 @@ TYPED_TEST(SimpleMemcachedSolutionTest, AddKillSetSetDataContentionSet)
       rc = this->get_data(data_out, cas);
       EXPECT_EQ(Store::Status::OK, rc);
       EXPECT_EQ(data_out, data_in);
-    }
-    else
-    {
-      EXPECT_TRUE(false);
     }
 
     TypeParam::restore_memcached_instance(this->_memcached_instances.back());
@@ -737,6 +760,9 @@ TYPED_TEST(SimpleMemcachedSolutionTest, AddKillCASDelete)
   // the primary memcached still fails with a CONNECTION FAILURE (even though
   // the memcached is back up). However, the SET would now work fine, apart from
   // the fact that we're using the wrong CAS - hence the data contention.
+  EXPECT_TRUE((rc == Store::Status::DATA_CONTENTION) ||
+              (rc == Store::Status::OK));
+
   if (rc == Store::Status::DATA_CONTENTION)
   {
     rc = this->get_data(data_out, cas);
@@ -744,10 +770,6 @@ TYPED_TEST(SimpleMemcachedSolutionTest, AddKillCASDelete)
 
     rc = this->set_data(data_in, cas, 0);
     EXPECT_EQ(Store::Status::OK, rc);
-  }
-  else if (rc != Store::Status::OK)
-  {
-    EXPECT_TRUE(false);
   }
 
   rc = this->get_data(data_out, cas);
@@ -764,14 +786,20 @@ class LargerClustersMemcachedSolutionTest : public BaseMemcachedSolutionTest
 {
   static void SetUpTestCase()
   {
-    _next_key = std::rand();
     create_and_start_memcached_instances(3);
     create_and_start_astaire_instances(1);
-    EXPECT_TRUE(wait_for_instances());
+
+    BaseMemcachedSolutionTest::SetUpTestCase();
   }
 };
 
 TYPED_TEST_CASE(LargerClustersMemcachedSolutionTest, MemcachedFailHelpers);
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// LargerClustersMemcachedSolutionTest testcases start here.
+///
+////////////////////////////////////////////////////////////////////////////////
 
 /// Add a key and retrieve it.
 TYPED_TEST(LargerClustersMemcachedSolutionTest, AddGet)
@@ -843,6 +871,9 @@ TYPED_TEST(LargerClustersMemcachedSolutionTest, AddKillGetSet)
   // the primary memcached still fails with a CONNECTION FAILURE (even though
   // the memcached is back up). However, the SET would now work fine, apart from
   // the fact that we're using the wrong CAS - hence the data contention.
+  EXPECT_TRUE((rc == Store::Status::DATA_CONTENTION) ||
+              (rc == Store::Status::OK));
+
   if (rc == Store::Status::DATA_CONTENTION)
   {
     rc = this->get_data(data_out, cas);
@@ -850,10 +881,6 @@ TYPED_TEST(LargerClustersMemcachedSolutionTest, AddKillGetSet)
 
     rc = this->set_data(data_in, cas);
     EXPECT_EQ(Store::Status::OK, rc);
-  }
-  else if (rc != Store::Status::OK)
-  {
-    EXPECT_TRUE(false);
   }
 
   rc = this->get_data(data_out, cas);

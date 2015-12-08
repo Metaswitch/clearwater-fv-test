@@ -5,6 +5,11 @@ all: stage-build
 ROOT := $(abspath $(shell pwd)/../)
 MK_DIR := ${ROOT}/mk
 
+# We use some of Astaire's libraries (e.g. libmemcached) rather than using
+# another copy of them as a submodule.
+ASTAIRE_LIBS := ${ROOT}/modules/astaire/usr/lib
+ASTAIRE_INCLUDES := ${ROOT}/modules/astaire/usr/include
+
 GTEST_DIR := $(ROOT)/modules/gmock/gtest
 GMOCK_DIR := $(ROOT)/modules/gmock
 
@@ -60,7 +65,7 @@ EXTRA_CLEANS += $(TEST_XML) \
 CPPFLAGS += -Wno-write-strings \
             -ggdb3 -std=c++0x
 CPPFLAGS += -I${ROOT}/include \
-            -I${ROOT}/modules/astaire/usr/include \
+            -I${ASTAIRE_INCLUDES} \
             -I${ROOT}/modules/cpp-common/include
 
 # Add cpp-common/src as a VPATH to pull in required production code
@@ -79,7 +84,7 @@ CPPFLAGS_TEST  += -DUNIT_TEST \
                   -I$(GTEST_DIR)/include -I$(GMOCK_DIR)/include \
                   -I${ROOT}/modules/cpp-common/test_utils
 
-LDFLAGS += -L${ROOT}/modules/astaire/usr/lib
+LDFLAGS += -L${ASTAIRE_LIBS}
 LDFLAGS += -lmemcached \
            -lsas \
            -lpthread \
@@ -91,7 +96,7 @@ LDFLAGS += -lmemcached \
 
 
 # Test build uses just-built libraries, which may not be installed
-LDFLAGS_TEST += -Wl,-rpath=$(ROOT)/modules/astaire/usr/lib
+LDFLAGS_TEST += -Wl,-rpath=$(ASTAIRE_LIBS)
 
 # Now the GMock / GTest boilerplate.
 GTEST_HEADERS := $(GTEST_DIR)/include/gtest/*.h \
@@ -153,11 +158,11 @@ test: run_test vg vg-check
 run_test: build_test | $(TEST_OUT_DIR)
 	rm -f $(TEST_XML)
 	rm -f $(OBJ_DIR_TEST)/*.gcda
-	LD_LIBRARY_PATH=../modules/astaire/usr/lib/ ./fvtest $(TARGET_BIN_TEST) $(EXTRA_TEST_ARGS) --gtest_output=xml:$(TEST_XML)
+	LD_LIBRARY_PATH=${ASTAIRE_LIBS} ./fvtest $(TARGET_BIN_TEST) $(EXTRA_TEST_ARGS) --gtest_output=xml:$(TEST_XML)
 
 .PHONY: debug
 debug: build_test
-	LD_LIBRARY_PATH=../modules/astaire/usr/lib/ ./fvtest gdb --args $(TARGET_BIN_TEST) $(EXTRA_TEST_ARGS)
+	LD_LIBRARY_PATH=${ASTAIRE_LIBS} ./fvtest gdb --args $(TARGET_BIN_TEST) $(EXTRA_TEST_ARGS)
 
 # Don't run VG against death tests; they don't play nicely.
 # Be aware that running this will count towards coverage.
@@ -167,7 +172,7 @@ debug: build_test
 # test failure from Jenkins.
 .PHONY: vg
 vg: build_test | $(TEST_OUT_DIR)
-	LD_LIBRARY_PATH=../modules/astaire/usr/lib/ ./fvtest valgrind --xml=yes --xml-file=$(VG_XML) $(VGFLAGS) \
+	LD_LIBRARY_PATH=${ASTAIRE_LIBS} ./fvtest valgrind --xml=yes --xml-file=$(VG_XML) $(VGFLAGS) \
 	  $(TARGET_BIN_TEST) --gtest_filter='-*DeathTest*' $(EXTRA_TEST_ARGS) > $(VG_OUT) 2>&1
 
 # Check whether there were any errors from valgrind. Output to screen any errors found,
@@ -188,7 +193,7 @@ vg-check: vg
 
 .PHONY: vg_raw
 vg_raw: build_test | $(TEST_OUT_DIR)
-	LD_LIBRARY_PATH=../modules/astaire/usr/lib/ ./fvtest valgrind --gen-suppressions=all $(VGFLAGS) \
+	LD_LIBRARY_PATH=${ASTAIRE_LIBS} ./fvtest valgrind --gen-suppressions=all $(VGFLAGS) \
 	  $(TARGET_BIN_TEST) --gtest_filter='-*DeathTest*' $(EXTRA_TEST_ARGS)
 
 .PHONY: distclean

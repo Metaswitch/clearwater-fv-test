@@ -82,7 +82,7 @@ bool ProcessInstance::kill_instance()
   if (kill(_pid, SIGTERM) == 0)
   {
     waitpid(_pid, &status, 0);
-    return WIFEXITED(status);
+    return WIFSIGNALED(status);
   }
   else
   {
@@ -96,9 +96,7 @@ bool ProcessInstance::kill_instance()
 bool ProcessInstance::restart_instance()
 {
   // Kill and start the instance.
-  kill_instance();
-
-  return start_instance();
+  return kill_instance() && start_instance();
 }
 
 /// Wait for the instance to come up by trying to connect to the port the
@@ -113,6 +111,12 @@ bool ProcessInstance::wait_for_instance()
   getaddrinfo("127.0.0.1", std::to_string(_port).c_str(), &hints, &res);
   sockfd = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
 
+  if (sockfd == -1)
+  {
+    perror("socket");
+    return false;
+  }
+
   bool connected = false;
   int attempts = 0;
 
@@ -122,7 +126,6 @@ bool ProcessInstance::wait_for_instance()
     if (connect(sockfd, res->ai_addr, res->ai_addrlen) == 0)
     {
       connected = true;
-      close(sockfd);
     }
     else
     {
@@ -131,6 +134,7 @@ bool ProcessInstance::wait_for_instance()
     }
   }
 
+  close(sockfd);
   freeaddrinfo(res);
 
   return connected;

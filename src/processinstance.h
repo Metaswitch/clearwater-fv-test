@@ -39,6 +39,7 @@ class ProcessInstance
 {
 public:
   ProcessInstance(int port) : _port(port) {};
+  ~ProcessInstance() { kill_instance(); }
 
   bool start_instance();
   bool kill_instance();
