@@ -32,24 +32,61 @@
  * as those licenses appear in the file LICENSE-OPENSSL.
  */
 
-#include "gtest/gtest.h"
-#include "gmock/gmock.h"
-#include "dnscachedresolver.h"
-#include "dnsmasq.h"
+#include <fstream>
+#include <string>
+#include <map>
+#include <cstdlib>
+#include <cassert>
 
-class DNSTest : public ::testing::Test
+#ifndef DNSMASQ_H
+#define DNSMASQ_H
+
+class DNSMasq
 {
-  DNSTest() {};
-  
+public:
+  DNSMasq(std::string local_ip, int port, std::map<std::string, std::string> a_records)
+  {
+    _cfgfile = local_ip + "_" + std::to_string(port) + "_" + "_dnsmasq.cfg";
+    _pidfile = "/tmp/" + local_ip + "_" + std::to_string(port) + "_" + "_dnsmasq.pid";
+    kill_pidfile();
+
+    std::ofstream ofs(_cfgfile, std::ios::trunc);
+    ofs << "listen-address=" << local_ip << "\n";
+    ofs << "port=" << port << "\n";
+
+    for (auto i: a_records)
+    {
+      ofs << "address=/" << i.first << "/" << i.second << "\n";
+    }
+
+    ofs.close();
+
+    std::string cmd = "dnsmasq -z -x " + _pidfile + " -C " + _cfgfile;
+    int rc = system(cmd.c_str());
+    assert(rc == 0);
+  }
+
+  ~DNSMasq()
+  {
+    kill_pidfile();
+    std::remove(_cfgfile.c_str());
+    std::remove(_pidfile.c_str());
+  }
+
+  void kill_pidfile()
+  {
+    std::ifstream input(_pidfile);
+    if (input.good())
+    {
+      int pid = 0;
+      input >> pid;
+      kill(pid, SIGTERM);
+    }
+  }
+
+private:
+  std::string _pidfile;
+  std::string _cfgfile;
 };
 
-TEST_F(DNSTest, BasicQuery)
-{
-  DNSMasq server("127.0.0.201", 5353, {{"test.query", "1.2.3.4"}});
-  // Send a DNS query to confirm it doesn't leak memory
-  DnsCachedResolver* r = new DnsCachedResolver("127.0.0.201", 5353);
-  DnsResult answer = r->dns_query("test.query", ns_t_a);
-  ASSERT_GT(answer.records().size(), 0);
-  delete r;
-}
-
+#endif
