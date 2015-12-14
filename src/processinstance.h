@@ -53,16 +53,3 @@ private:
   int _pid;
 };
 
-class MemcachedInstance : public ProcessInstance
-{
-public:
-  MemcachedInstance(int port) : ProcessInstance(port) {};
-  virtual bool execute_process();
-};
-
-class AstaireInstance : public ProcessInstance
-{
-public:
-  AstaireInstance(int port) : ProcessInstance(port) {};
-  virtual bool execute_process();
-};
