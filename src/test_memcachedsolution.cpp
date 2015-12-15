@@ -94,7 +94,9 @@ public:
   /// previous test, and the new test will assume this.
   virtual void SetUp()
   {
-    _store = new TopologyNeutralMemcachedStore();
+    _dns_client = new DnsCachedResolver("127.0.0.1");
+    _resolver = new AstaireResolver(_dns_client, AF_INET);
+    _store = new TopologyNeutralMemcachedStore("127.0.0.1", _resolver);
 
     // Create a new key for every test (to prevent tests from interacting with
     // each other).
@@ -107,6 +109,8 @@ public:
   virtual void TearDown()
   {
     delete _store; _store = NULL;
+    delete _resolver; _resolver = NULL;
+    delete _dns_client; _dns_client = NULL;
   }
 
   /// Helper method for generating a new unique key in the middle of a test.
@@ -236,6 +240,8 @@ public:
     return _store->delete_data(_table, _key, DUMMY_TRAIL_ID);
   }
 
+  DnsCachedResolver* _dns_client;
+  AstaireResolver* _resolver;
   TopologyNeutralMemcachedStore* _store;
 
   /// Use shared pointers for managing the instances so that the memory gets
