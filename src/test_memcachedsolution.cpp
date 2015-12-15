@@ -547,10 +547,28 @@ TEST_F(SimpleMemcachedSolutionMainlineTest, AddDeleteSetDataContention)
 ///
 ////////////////////////////////////////////////////////////////////////////////
 
-/// A class for killing and restoring a memcached instance. Used as a template
-/// along with MemcachedRestarter in the tests below.
-class MemcachedKiller
+/// A fixture for testing a deployment with 1 Astaire and 2 memcacheds.
+/// Templated so that we can test that behaviour is the same in different
+/// scenarios (numbers of Astaires and Memcacheds) and different failure
+/// modes.
+template <class T>
+class SimpleMemcachedSolutionFailureTest : public BaseMemcachedSolutionTest
 {
+  static void SetUpTestCase()
+  {
+    create_and_start_memcached_instances(T::num_memcached_instances());
+    create_and_start_astaire_instances(T::num_astaire_instances());
+
+    BaseMemcachedSolutionTest::SetUpTestCase();
+  }
+};
+
+/// Scenario in which a memcached instance fails and does not restart.
+class MemcachedFailsScenario
+{
+  static int num_memcached_instances() { return 2; }
+  static int num_astaire_instances() { return 1; }
+
   static void fail_memcached_instance(std::shared_ptr<MemcachedInstance> instance)
   {
     instance->kill_instance();
@@ -563,10 +581,12 @@ class MemcachedKiller
   }
 };
 
-/// A class for restarting a memcached instance. Used as a template along with
-/// MemcachedKiller in the tests below.
-class MemcachedRestarter
+/// Scenario in which a memcached instance restarts.
+class MemcachedRestartsScenario
 {
+  static int num_memcached_instances() { return 2; }
+  static int num_astaire_instances() { return 1; }
+
   static void fail_memcached_instance(std::shared_ptr<MemcachedInstance> instance)
   {
     instance->restart_instance();
@@ -578,24 +598,12 @@ class MemcachedRestarter
   }
 };
 
-typedef ::testing::Types<MemcachedKiller, MemcachedRestarter> MemcachedFailHelpers;
+typedef ::testing::Types<
+  MemcachedFailsScenario,
+  MemcachedRestartsScenario
+> FailureScenarios;
 
-/// A fixture for testing a deployment with 1 Astaire and 2 memcacheds.
-/// Templated so that we can test that behaviour is the same in the scenarios
-/// where a memcached dies and where a memcached bounces.
-template <class T>
-class SimpleMemcachedSolutionFailureTest : public BaseMemcachedSolutionTest
-{
-  static void SetUpTestCase()
-  {
-    create_and_start_memcached_instances(2);
-    create_and_start_astaire_instances(1);
-
-    BaseMemcachedSolutionTest::SetUpTestCase();
-  }
-};
-
-TYPED_TEST_CASE(SimpleMemcachedSolutionFailureTest, MemcachedFailHelpers);
+TYPED_TEST_CASE(SimpleMemcachedSolutionFailureTest, FailureScenarios);
 
 /// Kill a memcached instance. Add a key and retrieve it.
 TYPED_TEST(SimpleMemcachedSolutionFailureTest, KillAddGet)
@@ -802,6 +810,15 @@ TYPED_TEST(SimpleMemcachedSolutionFailureTest, AddKillCASDelete)
   TypeParam::restore_memcached_instance(this->_memcached_instances.back());
 }
 
+////////////////////////////////////////////////////////////////////////////////
+///
+/// LargerClustersMemcachedSolutionTest testcases start here.
+///
+/// This is not an exhaustive set of testcases and is intended as a kick of the
+/// tires.
+///
+////////////////////////////////////////////////////////////////////////////////
+
 /// A fixture for testing a deployment with 1 Astaire and 3 memcacheds.
 /// Templated so that we can test that behaviour is the same in the scenarios
 /// where a memcached dies and where a memcached bounces.
@@ -817,13 +834,41 @@ class LargerClustersMemcachedSolutionTest : public BaseMemcachedSolutionTest
   }
 };
 
-TYPED_TEST_CASE(LargerClustersMemcachedSolutionTest, MemcachedFailHelpers);
+/// Scenario in which a memcached instance fails and does not restart.
+class MemcachedKiller
+{
+  static void fail_memcached_instance(std::shared_ptr<MemcachedInstance> instance)
+  {
+    instance->kill_instance();
+  }
 
-////////////////////////////////////////////////////////////////////////////////
-///
-/// LargerClustersMemcachedSolutionTest testcases start here.
-///
-////////////////////////////////////////////////////////////////////////////////
+  static void restore_memcached_instance(std::shared_ptr<MemcachedInstance> instance)
+  {
+    instance->start_instance();
+    EXPECT_TRUE(instance->wait_for_instance());
+  }
+};
+
+/// Scenario in which a memcached instance restarts.
+class MemcachedRestarter
+{
+  static void fail_memcached_instance(std::shared_ptr<MemcachedInstance> instance)
+  {
+    instance->restart_instance();
+    EXPECT_TRUE(instance->wait_for_instance());
+  }
+
+  static void restore_memcached_instance(std::shared_ptr<MemcachedInstance> instance)
+  {
+  }
+};
+
+typedef ::testing::Types<
+  MemcachedFailsScenario,
+  MemcachedRestartsScenario
+> MemcachedFailures;
+
+TYPED_TEST_CASE(LargerClustersMemcachedSolutionTest, MemcachedFailures);
 
 /// Add a key and retrieve it.
 TYPED_TEST(LargerClustersMemcachedSolutionTest, AddGet)
