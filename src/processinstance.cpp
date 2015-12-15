@@ -141,7 +141,7 @@ bool ProcessInstance::wait_for_instance()
   return connected;
 }
 
-void DnsmasqInstance::write_config(std::map<std::string, std::string> a_records)
+void DnsmasqInstance::write_config(std::map<std::string, std::vector<std::string>> a_records)
 {
   _cfgfile = _ip + "_" + std::to_string(_port) + "_" + "_dnsmasq.cfg";
 
@@ -151,7 +151,10 @@ void DnsmasqInstance::write_config(std::map<std::string, std::string> a_records)
 
   for (auto i: a_records)
   {
-    ofs << "address=/" << i.first << "/" << i.second << "\n";
+    for (auto ip: i.second)
+    {
+      ofs << "host-record=" << i.first << "," << ip << "\n";
+    }
   }
 
   ofs.close();
