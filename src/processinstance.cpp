@@ -214,7 +214,8 @@ bool DnsmasqInstance::execute_process()
   // case return false.
   execlp("/usr/sbin/dnsmasq",
          "dnsmasq",
-         "-z",
+         "-z", // don't bind to all interfaces
+         "-k", // keep in foreground
          "-C",
          _cfgfile.c_str(),
          (char*)NULL);
