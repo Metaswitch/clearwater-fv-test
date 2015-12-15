@@ -95,9 +95,9 @@ public:
   /// previous test, and the new test will assume this.
   virtual void SetUp()
   {
-    _dns_client = new DnsCachedResolver("127.0.0.1");
+    _dns_client = new DnsCachedResolver("127.0.0.1", 5353);
     _resolver = new AstaireResolver(_dns_client, AF_INET);
-    _store = new TopologyNeutralMemcachedStore("127.0.0.1", _resolver);
+    _store = new TopologyNeutralMemcachedStore("astaire.local", _resolver);
 
     // Create a new key for every test (to prevent tests from interacting with
     // each other).
@@ -178,7 +178,8 @@ public:
     }
 
     _dnsmasq_instance = std::shared_ptr<DnsmasqInstance>(
-      new DnsmasqInstance("127.0.0.1", 53, {{"astaire.local", hosts}}));
+      new DnsmasqInstance("127.0.0.1", 5353, {{"astaire.local", hosts}}));
+    _dnsmasq_instance->start_instance();
   }
 
   /// Wait for all existing memcached and Astaire instances to come up by
@@ -324,6 +325,7 @@ class SimpleMemcachedSolutionMainlineTest : public BaseMemcachedSolutionTest
   {
     create_and_start_memcached_instances(2);
     create_and_start_astaire_instances(1);
+    create_and_start_dns_for_astaire(1);
 
     BaseMemcachedSolutionTest::SetUpTestCase();
   }
@@ -588,6 +590,7 @@ class SimpleMemcachedSolutionFailureTest : public BaseMemcachedSolutionTest
   {
     create_and_start_memcached_instances(T::num_memcached_instances());
     create_and_start_astaire_instances(T::num_astaire_instances());
+    create_and_start_dns_for_astaire(T::num_astaire_instances());
 
     BaseMemcachedSolutionTest::SetUpTestCase();
   }
@@ -859,6 +862,7 @@ class LargerClustersMemcachedSolutionTest : public BaseMemcachedSolutionTest
   {
     create_and_start_memcached_instances(3);
     create_and_start_astaire_instances(1);
+    create_and_start_dns_for_astaire(1);
 
     BaseMemcachedSolutionTest::SetUpTestCase();
   }
