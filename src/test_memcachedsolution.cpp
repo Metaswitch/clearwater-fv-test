@@ -281,6 +281,272 @@ void signal_handler(int sig)
   }
 }
 
+////////////////////////////////////////////////////////////////////////////////
+///
+/// SimpleMemcachedSolutionMainlineTest testcases start here.
+///
+////////////////////////////////////////////////////////////////////////////////
+
+/// A fixture for testing a deployment with 1 Astaire and 2 memcacheds.
+class SimpleMemcachedSolutionMainlineTest : public BaseMemcachedSolutionTest
+{
+  static void SetUpTestCase()
+  {
+    create_and_start_memcached_instances(2);
+    create_and_start_astaire_instances(1);
+
+    BaseMemcachedSolutionTest::SetUpTestCase();
+  }
+};
+
+/// Add a key and retrieve it.
+TEST_F(SimpleMemcachedSolutionMainlineTest, AddGet)
+{
+  uint64_t cas = 0;
+  Store::Status rc;
+  std::string data_in = "SimpleMemcachedSolutionMainlineTest.AddGet";
+  std::string data_out;
+
+  rc = this->set_data(data_in, cas);
+  EXPECT_EQ(Store::Status::OK, rc);
+
+  rc = this->get_data(data_out, cas);
+  EXPECT_EQ(Store::Status::OK, rc);
+  EXPECT_EQ(data_out, data_in);
+}
+
+/// Add two keys and retrieve them.
+TEST_F(SimpleMemcachedSolutionMainlineTest, AddGetTwoKeys)
+{
+  uint64_t cas1 = 0;
+  uint64_t cas2 = 0;
+  Store::Status rc;
+  std::string key1 = this->_key;
+  this->get_new_key();
+  std::string key2 = this->_key;
+  std::string data_in1 = "SimpleMemcachedSolutionMainlineTest.AddGetTwoKeys1";
+  std::string data_in2 = "SimpleMemcachedSolutionMainlineTest.AddGetTwoKeys2";
+  std::string data_out1;
+  std::string data_out2;
+
+  rc = this->set_data(key1, data_in1, cas1);
+  EXPECT_EQ(Store::Status::OK, rc);
+  rc = this->set_data(key2, data_in2, cas2);
+  EXPECT_EQ(Store::Status::OK, rc);
+
+  rc = this->get_data(key1, data_out1, cas1);
+  EXPECT_EQ(Store::Status::OK, rc);
+  EXPECT_EQ(data_out1, data_in1);
+  rc = this->get_data(key2, data_out2, cas2);
+  EXPECT_EQ(Store::Status::OK, rc);
+  EXPECT_EQ(data_out2, data_in2);
+}
+
+/// Add a key that expires.
+TEST_F(SimpleMemcachedSolutionMainlineTest, AddGetExpire)
+{
+  uint64_t cas = 0;
+  Store::Status rc;
+  std::string data_in = "SimpleMemcachedSolutionMainlineTest.AddGetExpire";
+  std::string data_out;
+
+  rc = this->set_data(data_in, cas, 1);
+  EXPECT_EQ(Store::Status::OK, rc);
+
+  rc = this->get_data(data_out, cas);
+  EXPECT_EQ(Store::Status::OK, rc);
+  EXPECT_EQ(data_out, data_in);
+
+  sleep(2);
+
+  rc = this->get_data(data_out, cas);
+  EXPECT_EQ(Store::Status::NOT_FOUND, rc);
+}
+
+/// Add a key, retrieve it and try to update it twice. The second attempt fails
+/// due to data contention.
+TEST_F(SimpleMemcachedSolutionMainlineTest, AddSetSetDataContentionSet)
+{
+  uint64_t cas = 0;
+  Store::Status rc;
+  std::string data_in = "SimpleMemcachedSolutionMainlineTest.AddSetSetDataContentionSet";
+  std::string data_out;
+
+  rc = this->set_data(data_in, cas);
+  EXPECT_EQ(Store::Status::OK, rc);
+
+  rc = this->get_data(data_out, cas);
+  EXPECT_EQ(Store::Status::OK, rc);
+  EXPECT_EQ(data_out, data_in);
+
+  data_in = "SimpleMemcachedSolutionMainlineTest.AddSetSetDataContentionSet_New1";
+  rc = this->set_data(data_in, cas);
+  EXPECT_EQ(Store::Status::OK, rc);
+
+  std::string failed_data_in = "FAIL";
+  rc = this->set_data(data_in, cas);
+  EXPECT_EQ(Store::Status::DATA_CONTENTION, rc);
+
+  rc = this->get_data(data_out, cas);
+  EXPECT_EQ(Store::Status::OK, rc);
+  EXPECT_EQ(data_out, data_in);
+
+  data_in = "SimpleMemcachedSolutionMainlineTest.AddSetSetDataContentionSet_New2";
+  rc = this->set_data(data_in, cas);
+  EXPECT_EQ(Store::Status::OK, rc);
+
+  rc = this->get_data(data_out, cas);
+  EXPECT_EQ(Store::Status::OK, rc);
+  EXPECT_EQ(data_out, data_in);
+}
+
+/// Add a key and retrieve it. Try to update the key with a new value and also
+/// to update it with an expiry of 0. The update fails due to data contention.
+/// Try it again and check the key has gone.
+TEST_F(SimpleMemcachedSolutionMainlineTest, AddSetCASDeleteDataContentionCASDelete)
+{
+  uint64_t cas = 0;
+  Store::Status rc;
+  std::string data_in = "SimpleMemcachedSolutionMainlineTest.AddSetCASDeleteDataContentionCASDelete";
+  std::string data_out;
+
+  rc = this->set_data(data_in, cas);
+  EXPECT_EQ(Store::Status::OK, rc);
+
+  rc = this->get_data(data_out, cas);
+  EXPECT_EQ(Store::Status::OK, rc);
+  EXPECT_EQ(data_out, data_in);
+
+  data_in = "SimpleMemcachedSolutionMainlineTest.AddSetCASDeleteDataContentionCASDelete_New";
+  rc = this->set_data(data_in, cas);
+  EXPECT_EQ(Store::Status::OK, rc);
+
+  std::string failed_data_in = "FAIL";
+  rc = this->set_data(data_in, cas, 0);
+  EXPECT_EQ(Store::Status::DATA_CONTENTION, rc);
+
+  rc = this->get_data(data_out, cas);
+  EXPECT_EQ(Store::Status::OK, rc);
+  EXPECT_EQ(data_out, data_in);
+
+  data_in = "DELETE";
+  rc = this->set_data(data_in, cas, 0);
+  EXPECT_EQ(Store::Status::OK, rc);
+
+  rc = this->get_data(data_out, cas);
+  EXPECT_EQ(Store::Status::NOT_FOUND, rc);
+}
+
+/// Add a key twice. The second one fails due to data contention.
+TEST_F(SimpleMemcachedSolutionMainlineTest, AddAddDataContention)
+{
+  uint64_t cas = 0;
+  Store::Status rc;
+  std::string data_in = "SimpleMemcachedSolutionMainlineTest.AddAddDataContention";
+  std::string data_out;
+
+  rc = this->set_data(data_in, cas);
+  EXPECT_EQ(Store::Status::OK, rc);
+
+  std::string new_data_in = "SimpleMemcachedSolutionMainlineTest.AddAddDataContention_New";
+  uint64_t new_cas = 0;
+  rc = this->set_data(new_data_in, new_cas);
+  EXPECT_EQ(Store::Status::DATA_CONTENTION, rc);
+
+  rc = this->get_data(data_out, cas);
+  EXPECT_EQ(Store::Status::OK, rc);
+  EXPECT_EQ(data_out, data_in);
+}
+
+/// Add a key and delete it.
+TEST_F(SimpleMemcachedSolutionMainlineTest, AddDelete)
+{
+  uint64_t cas = 0;
+  Store::Status rc;
+  std::string data_in = "SimpleMemcachedSolutionMainlineTest.AddDelete";
+  std::string data_out;
+
+  rc = this->set_data(data_in, cas);
+  EXPECT_EQ(Store::Status::OK, rc);
+
+  rc = this->get_data(data_out, cas);
+  EXPECT_EQ(Store::Status::OK, rc);
+  EXPECT_EQ(data_out, data_in);
+
+  rc = this->delete_data();
+  EXPECT_EQ(Store::Status::OK, rc);
+
+  rc = this->get_data(data_out, cas);
+  EXPECT_EQ(Store::Status::NOT_FOUND, rc);
+}
+
+/// Delete a key that doesn't exist.
+TEST_F(SimpleMemcachedSolutionMainlineTest, Delete)
+{
+  Store::Status rc;
+  rc = this->delete_data();
+  EXPECT_EQ(Store::Status::OK, rc);
+}
+
+/// Add a key and delete it. Add it again.
+TEST_F(SimpleMemcachedSolutionMainlineTest, AddDeleteAdd)
+{
+  uint64_t cas = 0;
+  Store::Status rc;
+  std::string data_in = "SimpleMemcachedSolutionMainlineTest.AddDeleteAdd";
+  std::string data_out;
+
+  rc = this->set_data(data_in, cas);
+  EXPECT_EQ(Store::Status::OK, rc);
+
+  rc = this->get_data(data_out, cas);
+  EXPECT_EQ(Store::Status::OK, rc);
+  EXPECT_EQ(data_out, data_in);
+
+  rc = this->delete_data();
+  EXPECT_EQ(Store::Status::OK, rc);
+
+  rc = this->get_data(data_out, cas);
+  EXPECT_EQ(Store::Status::NOT_FOUND, rc);
+
+  rc = this->set_data(data_in, cas);
+  EXPECT_EQ(Store::Status::OK, rc);
+
+  rc = this->get_data(data_out, cas);
+  EXPECT_EQ(Store::Status::OK, rc);
+  EXPECT_EQ(data_out, data_in);
+}
+
+/// Add a key and delete it. Try to update the key. This fails due to data
+/// contention.
+TEST_F(SimpleMemcachedSolutionMainlineTest, AddDeleteSetDataContention)
+{
+  uint64_t cas = 0;
+  Store::Status rc;
+  std::string data_in = "SimpleMemcachedSolutionMainlineTest.AddDeleteSetDataContention";
+  std::string data_out;
+
+  rc = this->set_data(data_in, cas);
+  EXPECT_EQ(Store::Status::OK, rc);
+
+  rc = this->get_data(data_out, cas);
+  EXPECT_EQ(Store::Status::OK, rc);
+  EXPECT_EQ(data_out, data_in);
+
+  rc = this->delete_data();
+  EXPECT_EQ(Store::Status::OK, rc);
+
+  data_in = "SimpleMemcachedSolutionMainlineTest.AddDeleteSetDataContention_New";
+  rc = this->set_data(data_in, cas);
+  EXPECT_EQ(Store::Status::DATA_CONTENTION, rc);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// SimpleMemcachedSolutionFailureTest testcases start here.
+///
+////////////////////////////////////////////////////////////////////////////////
+
 /// A class for killing and restoring a memcached instance. Used as a template
 /// along with MemcachedRestarter in the tests below.
 class MemcachedKiller
@@ -318,7 +584,7 @@ typedef ::testing::Types<MemcachedKiller, MemcachedRestarter> MemcachedFailHelpe
 /// Templated so that we can test that behaviour is the same in the scenarios
 /// where a memcached dies and where a memcached bounces.
 template <class T>
-class SimpleMemcachedSolutionTest : public BaseMemcachedSolutionTest
+class SimpleMemcachedSolutionFailureTest : public BaseMemcachedSolutionTest
 {
   static void SetUpTestCase()
   {
@@ -329,264 +595,16 @@ class SimpleMemcachedSolutionTest : public BaseMemcachedSolutionTest
   }
 };
 
-TYPED_TEST_CASE(SimpleMemcachedSolutionTest, MemcachedFailHelpers);
-
-////////////////////////////////////////////////////////////////////////////////
-///
-/// SimpleMemcachedSolutionTest testcases start here.
-///
-////////////////////////////////////////////////////////////////////////////////
-
-/// Add a key and retrieve it.
-TYPED_TEST(SimpleMemcachedSolutionTest, AddGet)
-{
-  uint64_t cas = 0;
-  Store::Status rc;
-  std::string data_in = "SimpleMemcachedSolutionTest.AddGet";
-  std::string data_out;
-
-  rc = this->set_data(data_in, cas);
-  EXPECT_EQ(Store::Status::OK, rc);
-
-  rc = this->get_data(data_out, cas);
-  EXPECT_EQ(Store::Status::OK, rc);
-  EXPECT_EQ(data_out, data_in);
-}
-
-/// Add two keys and retrieve them.
-TYPED_TEST(SimpleMemcachedSolutionTest, AddGetTwoKeys)
-{
-  uint64_t cas1 = 0;
-  uint64_t cas2 = 0;
-  Store::Status rc;
-  std::string key1 = this->_key;
-  this->get_new_key();
-  std::string key2 = this->_key;
-  std::string data_in1 = "SimpleMemcachedSolutionTest.AddGetTwoKeys1";
-  std::string data_in2 = "SimpleMemcachedSolutionTest.AddGetTwoKeys2";
-  std::string data_out1;
-  std::string data_out2;
-
-  rc = this->set_data(key1, data_in1, cas1);
-  EXPECT_EQ(Store::Status::OK, rc);
-  rc = this->set_data(key2, data_in2, cas2);
-  EXPECT_EQ(Store::Status::OK, rc);
-
-  rc = this->get_data(key1, data_out1, cas1);
-  EXPECT_EQ(Store::Status::OK, rc);
-  EXPECT_EQ(data_out1, data_in1);
-  rc = this->get_data(key2, data_out2, cas2);
-  EXPECT_EQ(Store::Status::OK, rc);
-  EXPECT_EQ(data_out2, data_in2);
-}
-
-/// Add a key that expires.
-TYPED_TEST(SimpleMemcachedSolutionTest, AddGetExpire)
-{
-  uint64_t cas = 0;
-  Store::Status rc;
-  std::string data_in = "SimpleMemcachedSolutionTest.AddGetExpire";
-  std::string data_out;
-
-  rc = this->set_data(data_in, cas, 1);
-  EXPECT_EQ(Store::Status::OK, rc);
-
-  rc = this->get_data(data_out, cas);
-  EXPECT_EQ(Store::Status::OK, rc);
-  EXPECT_EQ(data_out, data_in);
-
-  sleep(2);
-
-  rc = this->get_data(data_out, cas);
-  EXPECT_EQ(Store::Status::NOT_FOUND, rc);
-}
-
-/// Add a key, retrieve it and try to update it twice. The second attempt fails
-/// due to data contention.
-TYPED_TEST(SimpleMemcachedSolutionTest, AddSetSetDataContentionSet)
-{
-  uint64_t cas = 0;
-  Store::Status rc;
-  std::string data_in = "SimpleMemcachedSolutionTest.AddSetSetDataContentionSet";
-  std::string data_out;
-
-  rc = this->set_data(data_in, cas);
-  EXPECT_EQ(Store::Status::OK, rc);
-
-  rc = this->get_data(data_out, cas);
-  EXPECT_EQ(Store::Status::OK, rc);
-  EXPECT_EQ(data_out, data_in);
-
-  data_in = "SimpleMemcachedSolutionTest.AddSetSetDataContentionSet_New1";
-  rc = this->set_data(data_in, cas);
-  EXPECT_EQ(Store::Status::OK, rc);
-
-  std::string failed_data_in = "FAIL";
-  rc = this->set_data(data_in, cas);
-  EXPECT_EQ(Store::Status::DATA_CONTENTION, rc);
-
-  rc = this->get_data(data_out, cas);
-  EXPECT_EQ(Store::Status::OK, rc);
-  EXPECT_EQ(data_out, data_in);
-
-  data_in = "SimpleMemcachedSolutionTest.AddSetSetDataContentionSet_New2";
-  rc = this->set_data(data_in, cas);
-  EXPECT_EQ(Store::Status::OK, rc);
-
-  rc = this->get_data(data_out, cas);
-  EXPECT_EQ(Store::Status::OK, rc);
-  EXPECT_EQ(data_out, data_in);
-}
-
-/// Add a key and retrieve it. Try to update the key with a new value and also
-/// to update it with an expiry of 0. The update fails due to data contention.
-/// Try it again and check the key has gone.
-TYPED_TEST(SimpleMemcachedSolutionTest, AddSetCASDeleteDataContentionCASDelete)
-{
-  uint64_t cas = 0;
-  Store::Status rc;
-  std::string data_in = "SimpleMemcachedSolutionTest.AddSetCASDeleteDataContentionCASDelete";
-  std::string data_out;
-
-  rc = this->set_data(data_in, cas);
-  EXPECT_EQ(Store::Status::OK, rc);
-
-  rc = this->get_data(data_out, cas);
-  EXPECT_EQ(Store::Status::OK, rc);
-  EXPECT_EQ(data_out, data_in);
-
-  data_in = "SimpleMemcachedSolutionTest.AddSetCASDeleteDataContentionCASDelete_New";
-  rc = this->set_data(data_in, cas);
-  EXPECT_EQ(Store::Status::OK, rc);
-
-  std::string failed_data_in = "FAIL";
-  rc = this->set_data(data_in, cas, 0);
-  EXPECT_EQ(Store::Status::DATA_CONTENTION, rc);
-
-  rc = this->get_data(data_out, cas);
-  EXPECT_EQ(Store::Status::OK, rc);
-  EXPECT_EQ(data_out, data_in);
-
-  data_in = "DELETE";
-  rc = this->set_data(data_in, cas, 0);
-  EXPECT_EQ(Store::Status::OK, rc);
-
-  rc = this->get_data(data_out, cas);
-  EXPECT_EQ(Store::Status::NOT_FOUND, rc);
-}
-
-/// Add a key twice. The second one fails due to data contention.
-TYPED_TEST(SimpleMemcachedSolutionTest, AddAddDataContention)
-{
-  uint64_t cas = 0;
-  Store::Status rc;
-  std::string data_in = "SimpleMemcachedSolutionTest.AddAddDataContention";
-  std::string data_out;
-
-  rc = this->set_data(data_in, cas);
-  EXPECT_EQ(Store::Status::OK, rc);
-
-  std::string new_data_in = "SimpleMemcachedSolutionTest.AddAddDataContention_New";
-  uint64_t new_cas = 0;
-  rc = this->set_data(new_data_in, new_cas);
-  EXPECT_EQ(Store::Status::DATA_CONTENTION, rc);
-
-  rc = this->get_data(data_out, cas);
-  EXPECT_EQ(Store::Status::OK, rc);
-  EXPECT_EQ(data_out, data_in);
-}
-
-/// Add a key and delete it.
-TYPED_TEST(SimpleMemcachedSolutionTest, AddDelete)
-{
-  uint64_t cas = 0;
-  Store::Status rc;
-  std::string data_in = "SimpleMemcachedSolutionTest.AddDelete";
-  std::string data_out;
-
-  rc = this->set_data(data_in, cas);
-  EXPECT_EQ(Store::Status::OK, rc);
-
-  rc = this->get_data(data_out, cas);
-  EXPECT_EQ(Store::Status::OK, rc);
-  EXPECT_EQ(data_out, data_in);
-
-  rc = this->delete_data();
-  EXPECT_EQ(Store::Status::OK, rc);
-
-  rc = this->get_data(data_out, cas);
-  EXPECT_EQ(Store::Status::NOT_FOUND, rc);
-}
-
-/// Delete a key that doesn't exist.
-TYPED_TEST(SimpleMemcachedSolutionTest, Delete)
-{
-  Store::Status rc;
-  rc = this->delete_data();
-  EXPECT_EQ(Store::Status::OK, rc);
-}
-
-/// Add a key and delete it. Add it again.
-TYPED_TEST(SimpleMemcachedSolutionTest, AddDeleteAdd)
-{
-  uint64_t cas = 0;
-  Store::Status rc;
-  std::string data_in = "SimpleMemcachedSolutionTest.AddDeleteAdd";
-  std::string data_out;
-
-  rc = this->set_data(data_in, cas);
-  EXPECT_EQ(Store::Status::OK, rc);
-
-  rc = this->get_data(data_out, cas);
-  EXPECT_EQ(Store::Status::OK, rc);
-  EXPECT_EQ(data_out, data_in);
-
-  rc = this->delete_data();
-  EXPECT_EQ(Store::Status::OK, rc);
-
-  rc = this->get_data(data_out, cas);
-  EXPECT_EQ(Store::Status::NOT_FOUND, rc);
-
-  rc = this->set_data(data_in, cas);
-  EXPECT_EQ(Store::Status::OK, rc);
-
-  rc = this->get_data(data_out, cas);
-  EXPECT_EQ(Store::Status::OK, rc);
-  EXPECT_EQ(data_out, data_in);
-}
-
-/// Add a key and delete it. Try to update the key. This fails due to data
-/// contention.
-TYPED_TEST(SimpleMemcachedSolutionTest, AddDeleteSetDataContention)
-{
-  uint64_t cas = 0;
-  Store::Status rc;
-  std::string data_in = "SimpleMemcachedSolutionTest.AddDeleteSetDataContention";
-  std::string data_out;
-
-  rc = this->set_data(data_in, cas);
-  EXPECT_EQ(Store::Status::OK, rc);
-
-  rc = this->get_data(data_out, cas);
-  EXPECT_EQ(Store::Status::OK, rc);
-  EXPECT_EQ(data_out, data_in);
-
-  rc = this->delete_data();
-  EXPECT_EQ(Store::Status::OK, rc);
-
-  data_in = "SimpleMemcachedSolutionTest.AddDeleteSetDataContention_New";
-  rc = this->set_data(data_in, cas);
-  EXPECT_EQ(Store::Status::DATA_CONTENTION, rc);
-}
+TYPED_TEST_CASE(SimpleMemcachedSolutionFailureTest, MemcachedFailHelpers);
 
 /// Kill a memcached instance. Add a key and retrieve it.
-TYPED_TEST(SimpleMemcachedSolutionTest, KillAddGet)
+TYPED_TEST(SimpleMemcachedSolutionFailureTest, KillAddGet)
 {
   TypeParam::fail_memcached_instance(this->_memcached_instances.back());
 
   uint64_t cas = 0;
   Store::Status rc;
-  std::string data_in = "SimpleMemcachedSolutionTest.KillAddGet";
+  std::string data_in = "SimpleMemcachedSolutionFailureTest.KillAddGet";
   std::string data_out;
 
   rc = this->set_data(data_in, cas);
@@ -600,11 +618,11 @@ TYPED_TEST(SimpleMemcachedSolutionTest, KillAddGet)
 }
 
 /// Add a key. Kill a memcached instance. Retrieve the key.
-TYPED_TEST(SimpleMemcachedSolutionTest, AddKillGet)
+TYPED_TEST(SimpleMemcachedSolutionFailureTest, AddKillGet)
 {
   uint64_t cas = 0;
   Store::Status rc;
-  std::string data_in = "SimpleMemcachedSolutionTest.AddKillGet";
+  std::string data_in = "SimpleMemcachedSolutionFailureTest.AddKillGet";
   std::string data_out;
 
   rc = this->set_data(data_in, cas);
@@ -621,11 +639,11 @@ TYPED_TEST(SimpleMemcachedSolutionTest, AddKillGet)
 
 /// Add a key. Kill a memcached instance. Try retrieve the key after it should
 /// have expired.
-TYPED_TEST(SimpleMemcachedSolutionTest, AddKillGetExpire)
+TYPED_TEST(SimpleMemcachedSolutionFailureTest, AddKillGetExpire)
 {
   uint64_t cas = 0;
   Store::Status rc;
-  std::string data_in = "SimpleMemcachedSolutionTest.AddKillGetExpire";
+  std::string data_in = "SimpleMemcachedSolutionFailureTest.AddKillGetExpire";
   std::string data_out;
 
   rc = this->set_data(data_in, cas, 1);
@@ -649,7 +667,7 @@ TYPED_TEST(SimpleMemcachedSolutionTest, AddKillGetExpire)
 ///
 /// Repeat this test 10 times so that we sometimes kill the primary and
 /// sometimes the backup.
-TYPED_TEST(SimpleMemcachedSolutionTest, AddKillSetSetDataContentionSet)
+TYPED_TEST(SimpleMemcachedSolutionFailureTest, AddKillSetSetDataContentionSet)
 {
   for (int ii = 0; ii < 10; ++ii)
   {
@@ -657,7 +675,7 @@ TYPED_TEST(SimpleMemcachedSolutionTest, AddKillSetSetDataContentionSet)
 
     uint64_t cas = 0;
     Store::Status rc;
-    std::string data_in = "SimpleMemcachedSolutionTest.AddKillSetSetDataContentionSet";
+    std::string data_in = "SimpleMemcachedSolutionFailureTest.AddKillSetSetDataContentionSet";
     std::string data_out;
 
     rc = this->set_data(data_in, cas);
@@ -669,7 +687,7 @@ TYPED_TEST(SimpleMemcachedSolutionTest, AddKillSetSetDataContentionSet)
 
     TypeParam::fail_memcached_instance(this->_memcached_instances.back());
 
-    data_in = "SimpleMemcachedSolutionTest.AddKillSetSetDataContentionSet_New1";
+    data_in = "SimpleMemcachedSolutionFailureTest.AddKillSetSetDataContentionSet_New1";
     rc = this->set_data(data_in, cas);
     EXPECT_TRUE((rc == Store::Status::DATA_CONTENTION) ||
                 (rc == Store::Status::OK));
@@ -692,7 +710,7 @@ TYPED_TEST(SimpleMemcachedSolutionTest, AddKillSetSetDataContentionSet)
       EXPECT_EQ(Store::Status::OK, rc);
       EXPECT_EQ(data_out, data_in);
 
-      data_in = "SimpleMemcachedSolutionTest.AddKillSetSetDataContentionSet_New2";
+      data_in = "SimpleMemcachedSolutionFailureTest.AddKillSetSetDataContentionSet_New2";
       rc = this->set_data(data_in, cas);
       EXPECT_EQ(Store::Status::OK, rc);
 
@@ -706,11 +724,11 @@ TYPED_TEST(SimpleMemcachedSolutionTest, AddKillSetSetDataContentionSet)
 }
 
 /// Add a key and delete it. Kill a memcached instance. Try to retrieve the key.
-TYPED_TEST(SimpleMemcachedSolutionTest, AddDeleteKill)
+TYPED_TEST(SimpleMemcachedSolutionFailureTest, AddDeleteKill)
 {
   uint64_t cas = 0;
   Store::Status rc;
-  std::string data_in = "SimpleMemcachedSolutionTest.AddDeleteKill";
+  std::string data_in = "SimpleMemcachedSolutionFailureTest.AddDeleteKill";
   std::string data_out;
 
   rc = this->set_data(data_in, cas);
@@ -736,11 +754,11 @@ TYPED_TEST(SimpleMemcachedSolutionTest, AddDeleteKill)
 /// the primary or backup memcached for this key has been killed. If it does,
 /// retrieve the key again and update the key with an expiry of 0. Check that
 /// the key has gone.
-TYPED_TEST(SimpleMemcachedSolutionTest, AddKillCASDelete)
+TYPED_TEST(SimpleMemcachedSolutionFailureTest, AddKillCASDelete)
 {
   uint64_t cas = 0;
   Store::Status rc;
-  std::string data_in = "SimpleMemcachedSolutionTest.AddKillCASDelete";
+  std::string data_in = "SimpleMemcachedSolutionFailureTest.AddKillCASDelete";
   std::string data_out;
 
   rc = this->set_data(data_in, cas);
