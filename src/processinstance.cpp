@@ -45,6 +45,7 @@
 #include <sys/wait.h>
 #include <netdb.h>
 #include <cstring>
+#include <fstream>
 
 /// Start this instance.
 bool ProcessInstance::start_instance()
@@ -100,7 +101,7 @@ bool ProcessInstance::restart_instance()
 }
 
 /// Wait for the instance to come up by trying to connect to the port the
-/// instance listens on. We currently run everything on 127.0.0.1.
+/// instance listens on.
 bool ProcessInstance::wait_for_instance()
 {
   struct addrinfo hints, *res;
@@ -108,7 +109,7 @@ bool ProcessInstance::wait_for_instance()
   memset(&hints, 0, sizeof hints);
   hints.ai_family = AF_UNSPEC;
   hints.ai_socktype = SOCK_STREAM;
-  getaddrinfo("127.0.0.1", std::to_string(_port).c_str(), &hints, &res);
+  getaddrinfo(_ip.c_str(), std::to_string(_port).c_str(), &hints, &res);
   sockfd = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
 
   if (sockfd == -1)
@@ -140,3 +141,32 @@ bool ProcessInstance::wait_for_instance()
   return connected;
 }
 
+void DnsmasqInstance::write_config(std::map<std::string, std::string> a_records)
+{
+  _cfgfile = _ip + "_" + std::to_string(_port) + "_" + "_dnsmasq.cfg";
+
+  std::ofstream ofs(_cfgfile, std::ios::trunc);
+  ofs << "listen-address=" << _ip << "\n";
+  ofs << "port=" << _port << "\n";
+
+  for (auto i: a_records)
+  {
+    ofs << "address=/" << i.first << "/" << i.second << "\n";
+  }
+
+  ofs.close();
+}
+
+bool DnsmasqInstance::execute_process()
+{
+  // Start dnsmasq. execlp only returns if an error has occurred, in which
+  // case return false.
+  execlp("/usr/sbin/dnsmasq",
+         "dnsmasq",
+         "-z",
+         "-C",
+         _cfgfile.c_str(),
+         (char*)NULL);
+  perror("execlp");
+  return false;
+}

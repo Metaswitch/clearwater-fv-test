@@ -35,11 +35,15 @@
  * as those licenses appear in the file LICENSE-OPENSSL.
  */
 
+#include <string>
+#include <map>
+
 class ProcessInstance
 {
 public:
-  ProcessInstance(int port) : _port(port) {};
-  ~ProcessInstance() { kill_instance(); }
+  ProcessInstance(std::string ip, int port) : _ip(ip), _port(port) {};
+  ProcessInstance(int port) : ProcessInstance("127.0.0.1", port) {};
+  virtual ~ProcessInstance() { kill_instance(); }
 
   bool start_instance();
   bool kill_instance();
@@ -49,7 +53,21 @@ public:
 private:
   virtual bool execute_process() = 0;
 
+  std::string _ip;
   int _port;
   int _pid;
+};
+
+class DnsmasqInstance : public ProcessInstance
+{
+public:
+  DnsmasqInstance(std::string ip, int port, std::map<std::string, std::string> a_records) :
+    ProcessInstance(ip, port) { write_config(a_records); };
+  ~DnsmasqInstance() { std::remove(_cfgfile.c_str()); };
+  
+  bool execute_process();
+private:
+  void write_config(std::map<std::string, std::string> a_records);
+  std::string _cfgfile;
 };
 
