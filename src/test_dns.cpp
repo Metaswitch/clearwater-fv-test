@@ -35,7 +35,7 @@
 #include "gtest/gtest.h"
 #include "gmock/gmock.h"
 #include "dnscachedresolver.h"
-#include "dnsmasq.h"
+#include "processinstance.h"
 
 class DNSTest : public ::testing::Test
 {
@@ -45,7 +45,9 @@ class DNSTest : public ::testing::Test
 
 TEST_F(DNSTest, BasicQuery)
 {
-  DNSMasq server("127.0.0.201", 5353, {{"test.query", "1.2.3.4"}});
+  DnsmasqInstance server("127.0.0.201", 5353, {{"test.query", "1.2.3.4"}});
+  server.start_instance();
+  server.wait_for_instance();
   // Send a DNS query to confirm it doesn't leak memory
   DnsCachedResolver* r = new DnsCachedResolver("127.0.0.201", 5353);
   DnsResult answer = r->dns_query("test.query", ns_t_a);
