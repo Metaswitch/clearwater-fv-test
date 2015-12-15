@@ -569,15 +569,15 @@ class MemcachedFailsScenario
   static int num_memcached_instances() { return 2; }
   static int num_astaire_instances() { return 1; }
 
-  static void fail_memcached_instance(std::shared_ptr<MemcachedInstance> instance)
+  static void trigger_failure(BaseMemcachedSolutionTest* fixture)
   {
-    instance->kill_instance();
+    fixture->_memcached_instances.back()->kill_instance();
   }
 
-  static void restore_memcached_instance(std::shared_ptr<MemcachedInstance> instance)
+  static void fix_failure(BaseMemcachedSolutionTest* fixture)
   {
-    instance->start_instance();
-    EXPECT_TRUE(instance->wait_for_instance());
+    fixture->_memcached_instances.back()->start_instance();
+    EXPECT_TRUE(fixture->_memcached_instances.back()->wait_for_instance());
   }
 };
 
@@ -587,13 +587,13 @@ class MemcachedRestartsScenario
   static int num_memcached_instances() { return 2; }
   static int num_astaire_instances() { return 1; }
 
-  static void fail_memcached_instance(std::shared_ptr<MemcachedInstance> instance)
+  static void trigger_failure(BaseMemcachedSolutionTest* fixture)
   {
-    instance->restart_instance();
-    EXPECT_TRUE(instance->wait_for_instance());
+    fixture->_memcached_instances.back()->restart_instance();
+    EXPECT_TRUE(fixture->_memcached_instances.back()->wait_for_instance());
   }
 
-  static void restore_memcached_instance(std::shared_ptr<MemcachedInstance> instance)
+  static void fix_failure(BaseMemcachedSolutionTest* fixture)
   {
   }
 };
@@ -608,7 +608,7 @@ TYPED_TEST_CASE(SimpleMemcachedSolutionFailureTest, FailureScenarios);
 /// Kill a memcached instance. Add a key and retrieve it.
 TYPED_TEST(SimpleMemcachedSolutionFailureTest, KillAddGet)
 {
-  TypeParam::fail_memcached_instance(this->_memcached_instances.back());
+  TypeParam::trigger_failure(this);
 
   uint64_t cas = 0;
   Store::Status rc;
@@ -622,7 +622,7 @@ TYPED_TEST(SimpleMemcachedSolutionFailureTest, KillAddGet)
   EXPECT_EQ(Store::Status::OK, rc);
   EXPECT_EQ(data_out, data_in);
 
-  TypeParam::restore_memcached_instance(this->_memcached_instances.back());
+  TypeParam::fix_failure(this);
 }
 
 /// Add a key. Kill a memcached instance. Retrieve the key.
@@ -636,13 +636,13 @@ TYPED_TEST(SimpleMemcachedSolutionFailureTest, AddKillGet)
   rc = this->set_data(data_in, cas);
   EXPECT_EQ(Store::Status::OK, rc);
 
-  TypeParam::fail_memcached_instance(this->_memcached_instances.back());
+  TypeParam::trigger_failure(this);
 
   rc = this->get_data(data_out, cas);
   EXPECT_EQ(Store::Status::OK, rc);
   EXPECT_EQ(data_out, data_in);
 
-  TypeParam::restore_memcached_instance(this->_memcached_instances.back());
+  TypeParam::fix_failure(this);
 }
 
 /// Add a key. Kill a memcached instance. Try retrieve the key after it should
@@ -657,14 +657,14 @@ TYPED_TEST(SimpleMemcachedSolutionFailureTest, AddKillGetExpire)
   rc = this->set_data(data_in, cas, 1);
   EXPECT_EQ(Store::Status::OK, rc);
 
-  TypeParam::fail_memcached_instance(this->_memcached_instances.back());
+  TypeParam::trigger_failure(this);
 
   sleep(2);
 
   rc = this->get_data(data_out, cas);
   EXPECT_EQ(Store::Status::NOT_FOUND, rc);
 
-  TypeParam::restore_memcached_instance(this->_memcached_instances.back());
+  TypeParam::fix_failure(this);
 }
 
 /// Add a key and retrieve it. Kill a memcached instance. Update the key. This
@@ -693,7 +693,7 @@ TYPED_TEST(SimpleMemcachedSolutionFailureTest, AddKillSetSetDataContentionSet)
     EXPECT_EQ(Store::Status::OK, rc);
     EXPECT_EQ(data_out, data_in);
 
-    TypeParam::fail_memcached_instance(this->_memcached_instances.back());
+    TypeParam::trigger_failure(this);
 
     data_in = "SimpleMemcachedSolutionFailureTest.AddKillSetSetDataContentionSet_New1";
     rc = this->set_data(data_in, cas);
@@ -727,7 +727,7 @@ TYPED_TEST(SimpleMemcachedSolutionFailureTest, AddKillSetSetDataContentionSet)
       EXPECT_EQ(data_out, data_in);
     }
 
-    TypeParam::restore_memcached_instance(this->_memcached_instances.back());
+    TypeParam::fix_failure(this);
   }
 }
 
@@ -749,12 +749,12 @@ TYPED_TEST(SimpleMemcachedSolutionFailureTest, AddDeleteKill)
   rc = this->delete_data();
   EXPECT_EQ(Store::Status::OK, rc);
 
-  TypeParam::fail_memcached_instance(this->_memcached_instances.back());
+  TypeParam::trigger_failure(this);
 
   rc = this->get_data(data_out, cas);
   EXPECT_EQ(Store::Status::NOT_FOUND, rc);
 
-  TypeParam::restore_memcached_instance(this->_memcached_instances.back());
+  TypeParam::fix_failure(this);
 }
 
 /// Add a key. Kill a memcached instance. Retrieve the key and update it with an
@@ -772,7 +772,7 @@ TYPED_TEST(SimpleMemcachedSolutionFailureTest, AddKillCASDelete)
   rc = this->set_data(data_in, cas);
   EXPECT_EQ(Store::Status::OK, rc);
 
-  TypeParam::fail_memcached_instance(this->_memcached_instances.back());
+  TypeParam::trigger_failure(this);
 
   rc = this->get_data(data_out, cas);
   EXPECT_EQ(Store::Status::OK, rc);
@@ -807,7 +807,7 @@ TYPED_TEST(SimpleMemcachedSolutionFailureTest, AddKillCASDelete)
   rc = this->get_data(data_out, cas);
   EXPECT_EQ(Store::Status::NOT_FOUND, rc);
 
-  TypeParam::restore_memcached_instance(this->_memcached_instances.back());
+  TypeParam::fix_failure(this);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -864,8 +864,8 @@ class MemcachedRestarter
 };
 
 typedef ::testing::Types<
-  MemcachedFailsScenario,
-  MemcachedRestartsScenario
+  MemcachedKiller,
+  MemcachedRestarter
 > MemcachedFailures;
 
 TYPED_TEST_CASE(LargerClustersMemcachedSolutionTest, MemcachedFailures);
