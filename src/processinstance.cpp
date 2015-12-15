@@ -181,6 +181,8 @@ bool AstaireInstance::execute_process()
          "astaire",
          "--local-name",
          "127.0.0.1",
+         "--bind-addr",
+         _ip.c_str(),
          "--cluster-settings-file",
          "./cluster_settings",
          "--log-level",
