@@ -187,6 +187,8 @@ bool AstaireInstance::execute_process()
          "./cluster_settings",
          "--log-level",
          std::to_string(log_level).c_str(),
+         "--bind-addr",
+         _ip.c_str(),
          (char*)NULL);
   perror("execlp");
   return false;

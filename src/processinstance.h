@@ -69,7 +69,7 @@ public:
 class AstaireInstance : public ProcessInstance
 {
 public:
-  AstaireInstance(int port) : ProcessInstance(port) {};
+  AstaireInstance(const std::string& ip, int port) : ProcessInstance(ip, port) {};
   virtual bool execute_process();
 };
 
@@ -79,7 +79,7 @@ public:
   DnsmasqInstance(std::string ip, int port, std::map<std::string, std::vector<std::string>> a_records) :
     ProcessInstance(ip, port) { write_config(a_records); };
   ~DnsmasqInstance() { std::remove(_cfgfile.c_str()); };
-  
+
   bool execute_process();
 private:
   void write_config(std::map<std::string, std::vector<std::string>> a_records);

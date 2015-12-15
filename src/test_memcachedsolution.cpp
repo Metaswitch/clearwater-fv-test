@@ -81,6 +81,7 @@ public:
 
     _memcached_instances.clear();
     _astaire_instances.clear();
+    _dnsmasq_instance.reset();
 
     if (remove("cluster_settings") != 0)
     {
@@ -159,9 +160,25 @@ public:
   {
     for (int ii = 0; ii < astaire_instances; ++ii)
     {
-      _astaire_instances.emplace_back(new AstaireInstance(ASTAIRE_PORT));
+      std::string ip = "127.0.0." + std::to_string(ii + 1);
+      _astaire_instances.emplace_back(new AstaireInstance(ip, ASTAIRE_PORT));
       _astaire_instances.back()->start_instance();
     }
+  }
+
+  /// Creates and starts up a dnsmasq instance to allow the store to find
+  /// Astaire instances.
+  static void create_and_start_dns_for_astaire(int astaire_instances)
+  {
+    std::vector<std::string> hosts;
+
+    for (int ii = 0; ii < astaire_instances; ++ii)
+    {
+      hosts.push_back("127.0.0." + std::to_string(ii + 1));
+    }
+
+    _dnsmasq_instance = std::shared_ptr<DnsmasqInstance>(
+      new DnsmasqInstance("127.0.0.1", 53, {{"astaire.local", hosts}}));
   }
 
   /// Wait for all existing memcached and Astaire instances to come up by
@@ -188,6 +205,16 @@ public:
          ++inst)
     {
       (*inst)->wait_for_instance();
+
+      if (!success)
+      {
+        return success;
+      }
+    }
+
+    if (_dnsmasq_instance)
+    {
+      _dnsmasq_instance->wait_for_instance();
 
       if (!success)
       {
@@ -248,6 +275,7 @@ public:
   /// freed when the vector is cleared.
   static std::vector<std::shared_ptr<MemcachedInstance>> _memcached_instances;
   static std::vector<std::shared_ptr<AstaireInstance>> _astaire_instances;
+  static std::shared_ptr<DnsmasqInstance> _dnsmasq_instance;
 
   /// Tests that use this fixture use a monotonically incrementing numerical key
   /// (so that tests are isolated from each other). This variable stores the
@@ -261,6 +289,7 @@ public:
 
 std::vector<std::shared_ptr<MemcachedInstance>> BaseMemcachedSolutionTest::_memcached_instances;
 std::vector<std::shared_ptr<AstaireInstance>> BaseMemcachedSolutionTest::_astaire_instances;
+std::shared_ptr<DnsmasqInstance> BaseMemcachedSolutionTest::_dnsmasq_instance;
 
 unsigned int BaseMemcachedSolutionTest::_next_key;
 const std::string BaseMemcachedSolutionTest::_table = "test_table";
@@ -274,6 +303,7 @@ void signal_handler(int sig)
 
   BaseMemcachedSolutionTest::_memcached_instances.clear();
   BaseMemcachedSolutionTest::_astaire_instances.clear();
+  BaseMemcachedSolutionTest::_dnsmasq_instance.reset();
 
   if (remove("cluster_settings") != 0)
   {
