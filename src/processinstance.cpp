@@ -83,7 +83,7 @@ bool ProcessInstance::kill_instance()
   if (kill(_pid, SIGTERM) == 0)
   {
     waitpid(_pid, &status, 0);
-    return WIFSIGNALED(status);
+    return (WIFSIGNALED(status) || WIFEXITED(status));
   }
   else
   {
@@ -187,8 +187,6 @@ bool AstaireInstance::execute_process()
          "./cluster_settings",
          "--log-level",
          std::to_string(log_level).c_str(),
-         "--bind-addr",
-         _ip.c_str(),
          (char*)NULL);
   perror("execlp");
   return false;
