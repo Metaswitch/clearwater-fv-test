@@ -37,6 +37,7 @@
 
 #include <string>
 #include <map>
+#include <vector>
 
 class ProcessInstance
 {
@@ -75,12 +76,12 @@ public:
 class DnsmasqInstance : public ProcessInstance
 {
 public:
-  DnsmasqInstance(std::string ip, int port, std::map<std::string, std::string> a_records) :
+  DnsmasqInstance(std::string ip, int port, std::map<std::string, std::vector<std::string>> a_records) :
     ProcessInstance(ip, port) { write_config(a_records); };
   ~DnsmasqInstance() { std::remove(_cfgfile.c_str()); };
   
   bool execute_process();
 private:
-  void write_config(std::map<std::string, std::string> a_records);
+  void write_config(std::map<std::string, std::vector<std::string>> a_records);
   std::string _cfgfile;
 };

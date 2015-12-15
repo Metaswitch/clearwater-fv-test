@@ -45,13 +45,13 @@ class DNSTest : public ::testing::Test
 
 TEST_F(DNSTest, BasicQuery)
 {
-  DnsmasqInstance server("127.0.0.201", 5353, {{"test.query", "1.2.3.4"}});
+  DnsmasqInstance server("127.0.0.201", 5353, {{"test.query", {"1.2.3.4", "5.6.7.8"}}});
   server.start_instance();
   server.wait_for_instance();
   // Send a DNS query to confirm it doesn't leak memory
   DnsCachedResolver* r = new DnsCachedResolver("127.0.0.201", 5353);
   DnsResult answer = r->dns_query("test.query", ns_t_a);
-  ASSERT_GT(answer.records().size(), 0);
+  ASSERT_EQ(answer.records().size(), 2);
   delete r;
 }
 
