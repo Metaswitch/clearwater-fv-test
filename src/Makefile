@@ -35,7 +35,8 @@ TARGET_SOURCES_TEST := memcachedstore.cpp \
                        test_memcached_config.cpp \
                        test_memcachedstoreview.cpp \
                        test_dns.cpp \
-                       test_snmp.cpp
+                       test_snmp.cpp \
+                       processinstance.cpp
 
 TARGET_EXTRA_OBJS_TEST := gmock-all.o \
                           gtest-all.o \
