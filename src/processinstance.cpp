@@ -141,12 +141,6 @@ bool ProcessInstance::wait_for_instance()
   return connected;
 }
 
-bool DnsmasqInstance::wait_for_instance()
-{
-  sleep(1);
-  return true;
-}
-
 void DnsmasqInstance::write_config(std::map<std::string, std::string> a_records)
 {
   _cfgfile = _ip + "_" + std::to_string(_port) + "_" + "_dnsmasq.cfg";

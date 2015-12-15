@@ -48,7 +48,7 @@ public:
   bool start_instance();
   bool kill_instance();
   bool restart_instance();
-  virtual bool wait_for_instance();
+  bool wait_for_instance();
 
 private:
   virtual bool execute_process() = 0;
@@ -63,9 +63,8 @@ class DnsmasqInstance : public ProcessInstance
 public:
   DnsmasqInstance(std::string ip, int port, std::map<std::string, std::string> a_records) :
     ProcessInstance(ip, port) { write_config(a_records); };
-  virtual ~DnsmasqInstance() { std::remove(_cfgfile.c_str()); };
+  ~DnsmasqInstance() { std::remove(_cfgfile.c_str()); };
   
-  bool wait_for_instance();
   bool execute_process();
 private:
   void write_config(std::map<std::string, std::string> a_records);
