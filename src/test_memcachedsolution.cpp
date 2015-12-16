@@ -573,6 +573,59 @@ TEST_F(SimpleMemcachedSolutionMainlineTest, AddDeleteSetDataContention)
   EXPECT_EQ(Store::Status::DATA_CONTENTION, rc);
 }
 
+TEST_F(SimpleMemcachedSolutionMainlineTest, ConnectUsingIpAddress)
+{
+  delete _store; _store = NULL;
+  _store = new TopologyNeutralMemcachedStore("127.0.0.1", _resolver);
+
+  uint64_t cas = 0;
+  Store::Status rc;
+  std::string data_in = "SimpleMemcachedSolutionMainlineTest.AddGet";
+  std::string data_out;
+
+  rc = this->set_data(data_in, cas);
+  EXPECT_EQ(Store::Status::OK, rc);
+
+  rc = this->get_data(data_out, cas);
+  EXPECT_EQ(Store::Status::OK, rc);
+  EXPECT_EQ(data_out, data_in);
+
+  data_in = "SimpleMemcachedSolutionMainlineTest.AddGet_1";
+  rc = this->set_data(data_in, cas);
+  EXPECT_EQ(Store::Status::OK, rc);
+
+  rc = this->get_data(data_out, cas);
+  EXPECT_EQ(Store::Status::OK, rc);
+  EXPECT_EQ(data_out, data_in);
+
+  rc = this->delete_data();
+  EXPECT_EQ(Store::Status::OK, rc);
+
+  rc = this->get_data(data_out, cas);
+  EXPECT_EQ(Store::Status::NOT_FOUND, rc);
+}
+
+
+TEST_F(SimpleMemcachedSolutionMainlineTest, BadDomainName)
+{
+  delete _store; _store = NULL;
+  _store = new TopologyNeutralMemcachedStore("bad.domain.name", _resolver);
+
+  uint64_t cas = 0;
+  Store::Status rc;
+  std::string data_in = "SimpleMemcachedSolutionMainlineTest.AddGet";
+  std::string data_out;
+
+  rc = this->set_data(data_in, cas);
+  EXPECT_EQ(Store::Status::ERROR, rc);
+
+  rc = this->get_data(data_out, cas);
+  EXPECT_EQ(Store::Status::ERROR, rc);
+
+  rc = this->delete_data();
+  EXPECT_EQ(Store::Status::ERROR, rc);
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 ///
 /// SimpleMemcachedSolutionFailureTest testcases start here.
