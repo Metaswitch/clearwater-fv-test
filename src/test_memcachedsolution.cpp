@@ -1217,6 +1217,12 @@ TYPED_TEST(MemcachedSolutionThrashTest, ThrashTest)
     threads[i].join();
   }
 
+  // the purpose of this sleep is to allow the connections in the store to
+  // become idle so that we hit the code that cleans them up. This isn't really
+  // testing the API (as we need to know the connection timeout), but at least
+  // we don't place any extra constraints on the API.
+  sleep(61);
+
   for (int i = 0; i < 10; ++i)
   {
     SCOPED_TRACE(keys[i]);
