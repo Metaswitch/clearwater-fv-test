@@ -234,10 +234,10 @@ public:
   }
 
   /// Helper method for setting data in memcached for a specified key.
-  Store::Status set_data(std::string& key,
-                         std::string& data,
+  Store::Status set_data(const std::string& key,
+                         const std::string& data,
                          uint64_t cas,
-                         int expiry = 5)
+                         int expiry = 60)
   {
     return _store->set_data(_table,
                             key,
@@ -553,6 +553,11 @@ TEST_F(SimpleMemcachedSolutionTest, AddSetCASDeleteDataContentionCASDelete)
   rc = this->set_data(data_in, cas, 0);
   EXPECT_EQ(Store::Status::OK, rc);
 
+  // Check that the data has been deleted.
+  //
+  // We have to sleep a bit here as replications to the non-primary memcacheds
+  // is asynchronous so can race against the GET we are about to perform.
+  usleep(10000);
   rc = this->get_data(data_out, cas);
   EXPECT_EQ(Store::Status::NOT_FOUND, rc);
 }
