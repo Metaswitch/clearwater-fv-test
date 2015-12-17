@@ -910,6 +910,12 @@ TYPED_TEST(MemcachedSolutionFailureTest, AddKillSetSetDataContentionSet)
     EXPECT_EQ(data_out, data_in);
 
     TypeParam::fix_failure(this);
+
+    // Bounce the store to prevent failures in this iteration from affecting
+    // the next one.
+    delete this->_store; this->_store = NULL;
+    this->_store = new TopologyNeutralMemcachedStore("astaire.local",
+                                                     this->_resolver);
   }
 }
 
