@@ -330,6 +330,15 @@ class ParameterizedMemcachedSolutionTest : public BaseMemcachedSolutionTest
 
 /// Useful pre-canned scenarios.
 
+/// Scenario in which everything is fine and dandy.
+class NoFailuresScenario
+{
+  static int num_memcached_instances() { return 2; }
+  static int num_astaire_instances() { return 2; }
+  static void trigger_failure(BaseMemcachedSolutionTest* fixture) {}
+  static void fix_failure(BaseMemcachedSolutionTest* fixture) {}
+};
+
 /// Scenario in which a memcached instance fails and does not restart.
 class MemcachedFailsScenario
 {
@@ -717,91 +726,6 @@ TEST_F(SimpleMemcachedSolutionTest, BadDomainName)
 
   rc = this->delete_data();
   EXPECT_EQ(Store::Status::ERROR, rc);
-}
-
-
-const int NUM_INCR_PER_KEY_PER_THREAD = 10;
-
-void thrash_thread_fn(TopologyNeutralMemcachedStore* store,
-                      std::string table,
-                      std::vector<std::string> keys)
-{
-  Store::Status rc;
-
-  for (int i = 0; i < NUM_INCR_PER_KEY_PER_THREAD; ++i)
-  {
-    SCOPED_TRACE("Increment " + std::to_string(i));
-
-    for(std::vector<std::string>::iterator key = keys.begin();
-        key != keys.end();
-        ++key)
-    {
-      SCOPED_TRACE("Key " + *key);
-
-      do
-      {
-        std::string data;
-        uint64_t cas;
-
-        rc = store->get_data(table, *key, data, cas, DUMMY_TRAIL_ID);
-        EXPECT_EQ(rc, Store::Status::OK);
-
-        int value = atoi(data.c_str());
-        value++;
-
-        rc = store->set_data(table,
-                             *key,
-                             std::to_string(value),
-                             cas,
-                             300,
-                             DUMMY_TRAIL_ID);
-        EXPECT_TRUE((rc == Store::Status::OK) ||
-                    (rc == Store::Status::DATA_CONTENTION));
-
-      } while (rc == Store::Status::DATA_CONTENTION);
-    }
-  }
-}
-
-TEST_F(SimpleMemcachedSolutionTest, ThrashTest)
-{
-  Store::Status rc;
-  std::vector<std::string> keys;
-  std::vector<std::thread> threads;
-
-  for (int i = 0; i < 10; ++i)
-  {
-    SCOPED_TRACE(_key);
-    keys.push_back(_key);
-    rc = this->set_data(_key, "0", 0);
-    EXPECT_EQ(rc, Store::Status::OK);
-    get_new_key();
-  }
-
-  for (int i = 0; i < 10; ++i)
-  {
-    threads.push_back(std::thread(thrash_thread_fn, this->_store, _table, keys));
-  }
-
-  for (int i = 0; i < 10; ++i)
-  {
-    threads[i].join();
-  }
-
-  for (int i = 0; i < 10; ++i)
-  {
-    SCOPED_TRACE(keys[i]);
-
-    uint64_t cas;
-    std::string data_out;
-    int expected_value = NUM_INCR_PER_KEY_PER_THREAD * threads.size();
-
-    rc = this->get_data(keys[i], data_out, cas);
-    EXPECT_EQ(rc, Store::Status::OK);
-    int actual_value = atoi(data_out.c_str());
-
-    EXPECT_EQ(expected_value, actual_value);
-  }
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1192,3 +1116,120 @@ TYPED_TEST(LargerClustersMemcachedSolutionTest, AddKillGetSet)
 
   TypeParam::fix_failure(this);
 }
+
+
+///////////////////////////////////////////////////////////////////////////////
+///
+/// MemcachedSolutionThrashTest tests.
+///
+///////////////////////////////////////////////////////////////////////////////
+
+template <class T>
+class MemcachedSolutionThrashTest : public ParameterizedMemcachedSolutionTest<T> {};
+
+const static int NUM_INCR_PER_KEY_PER_THREAD = 10;
+
+// We would like to run the thrash test in various failure scenarios, but we
+// lose consistency in these cases due to different nodes disagreeing on which
+// memcached is the primary they should be CASing against.
+typedef ::testing::Types<
+  // MemcachedFailsScenario,
+  // MemcachedRestartsScenario,
+  // AstaireFailsScenario,
+  // AstaireRestartsScenario,
+  NoFailuresScenario
+> ThrashTestScenarios;
+
+TYPED_TEST_CASE(MemcachedSolutionThrashTest, ThrashTestScenarios);
+
+void thrash_thread_fn(TopologyNeutralMemcachedStore* store,
+                      std::string table,
+                      std::vector<std::string> keys)
+{
+  Store::Status rc;
+
+  for (int i = 0; i < NUM_INCR_PER_KEY_PER_THREAD; ++i)
+  {
+    SCOPED_TRACE("Increment " + std::to_string(i));
+
+    for(std::vector<std::string>::iterator key = keys.begin();
+        key != keys.end();
+        ++key)
+    {
+      SCOPED_TRACE("Key " + *key);
+
+      do
+      {
+        std::string data;
+        uint64_t cas;
+
+        rc = store->get_data(table, *key, data, cas, DUMMY_TRAIL_ID);
+        EXPECT_EQ(rc, Store::Status::OK);
+
+        int value = atoi(data.c_str());
+        value++;
+
+        rc = store->set_data(table,
+                             *key,
+                             std::to_string(value),
+                             cas,
+                             300,
+                             DUMMY_TRAIL_ID);
+        EXPECT_TRUE((rc == Store::Status::OK) ||
+                    (rc == Store::Status::DATA_CONTENTION));
+
+      } while (rc == Store::Status::DATA_CONTENTION);
+    }
+  }
+}
+
+// The thrash tests works as follows:
+//
+// * Set 10 keys to have the value "0".
+// * Spawn 10 thrash threads. Each thread increments each key 10 times.
+// * The main thread waits for the thrash threads to complete.
+// * It then checks that the value of each key is 100.
+TYPED_TEST(MemcachedSolutionThrashTest, ThrashTest)
+{
+  Store::Status rc;
+  std::vector<std::string> keys;
+  std::vector<std::thread> threads;
+
+  for (int i = 0; i < 10; ++i)
+  {
+    SCOPED_TRACE(this->_key);
+    keys.push_back(this->_key);
+    rc = this->set_data(this->_key, "0", 0);
+    EXPECT_EQ(rc, Store::Status::OK);
+    this->get_new_key();
+  }
+
+  for (int i = 0; i < 10; ++i)
+  {
+    threads.push_back(std::thread(thrash_thread_fn,
+                                  this->_store,
+                                  this->_table,
+                                  keys));
+  }
+
+  for (int i = 0; i < 10; ++i)
+  {
+    threads[i].join();
+  }
+
+  for (int i = 0; i < 10; ++i)
+  {
+    SCOPED_TRACE(keys[i]);
+
+    uint64_t cas;
+    std::string data_out;
+    int expected_value = NUM_INCR_PER_KEY_PER_THREAD * threads.size();
+
+    rc = this->get_data(keys[i], data_out, cas);
+    EXPECT_EQ(rc, Store::Status::OK);
+    int actual_value = atoi(data_out.c_str());
+
+    EXPECT_EQ(expected_value, actual_value);
+  }
+}
+
