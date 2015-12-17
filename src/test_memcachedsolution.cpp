@@ -44,6 +44,7 @@
 #include <iostream>
 #include <fstream>
 #include <stdio.h>
+#include <thread>
 
 static const SAS::TrailId DUMMY_TRAIL_ID = 0x12345678;
 static const int BASE_MEMCACHED_PORT = 33333;
@@ -711,6 +712,91 @@ TEST_F(SimpleMemcachedSolutionTest, BadDomainName)
 
   rc = this->delete_data();
   EXPECT_EQ(Store::Status::ERROR, rc);
+}
+
+
+const int NUM_INCR_PER_KEY_PER_THREAD = 10;
+
+void thrash_thread_fn(TopologyNeutralMemcachedStore* store,
+                      std::string table,
+                      std::vector<std::string> keys)
+{
+  Store::Status rc;
+
+  for (int i = 0; i < NUM_INCR_PER_KEY_PER_THREAD; ++i)
+  {
+    SCOPED_TRACE("Increment " + std::to_string(i));
+
+    for(std::vector<std::string>::iterator key = keys.begin();
+        key != keys.end();
+        ++key)
+    {
+      SCOPED_TRACE("Key " + *key);
+
+      do
+      {
+        std::string data;
+        uint64_t cas;
+
+        rc = store->get_data(table, *key, data, cas, DUMMY_TRAIL_ID);
+        EXPECT_EQ(rc, Store::Status::OK);
+
+        int value = atoi(data.c_str());
+        value++;
+
+        rc = store->set_data(table,
+                             *key,
+                             std::to_string(value),
+                             cas,
+                             300,
+                             DUMMY_TRAIL_ID);
+        EXPECT_TRUE((rc == Store::Status::OK) ||
+                    (rc == Store::Status::DATA_CONTENTION));
+
+      } while (rc == Store::Status::DATA_CONTENTION);
+    }
+  }
+}
+
+TEST_F(SimpleMemcachedSolutionTest, ThrashTest)
+{
+  Store::Status rc;
+  std::vector<std::string> keys;
+  std::vector<std::thread> threads;
+
+  for (int i = 0; i < 10; ++i)
+  {
+    SCOPED_TRACE(_key);
+    keys.push_back(_key);
+    rc = this->set_data(_key, "0", 0);
+    EXPECT_EQ(rc, Store::Status::OK);
+    get_new_key();
+  }
+
+  for (int i = 0; i < 10; ++i)
+  {
+    threads.push_back(std::thread(thrash_thread_fn, this->_store, _table, keys));
+  }
+
+  for (int i = 0; i < 10; ++i)
+  {
+    threads[i].join();
+  }
+
+  for (int i = 0; i < 10; ++i)
+  {
+    SCOPED_TRACE(keys[i]);
+
+    uint64_t cas;
+    std::string data_out;
+    int expected_value = NUM_INCR_PER_KEY_PER_THREAD * threads.size();
+
+    rc = this->get_data(keys[i], data_out, cas);
+    EXPECT_EQ(rc, Store::Status::OK);
+    int actual_value = atoi(data_out.c_str());
+
+    EXPECT_EQ(expected_value, actual_value);
+  }
 }
 
 ////////////////////////////////////////////////////////////////////////////////
