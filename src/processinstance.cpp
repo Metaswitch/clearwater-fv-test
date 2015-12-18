@@ -83,7 +83,7 @@ bool ProcessInstance::kill_instance()
   if (kill(_pid, SIGTERM) == 0)
   {
     waitpid(_pid, &status, 0);
-    return WIFSIGNALED(status);
+    return (WIFSIGNALED(status) || WIFEXITED(status));
   }
   else
   {
@@ -122,6 +122,11 @@ bool ProcessInstance::wait_for_instance()
   int attempts = 0;
 
   // If the process hasn't come up after 5 seconds, call the whole thing off.
+  //
+  // Sleep a little bit to begin with to allow the instance to come up,
+  // otherwise we are almost guaranteed to wait for at least 1s.
+  usleep(10000);
+
   while ((!connected) && (attempts < 5))
   {
     if (connect(sockfd, res->ai_addr, res->ai_addrlen) == 0)
