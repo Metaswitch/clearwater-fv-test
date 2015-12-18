@@ -51,6 +51,9 @@ public:
   bool restart_instance();
   bool wait_for_instance();
 
+  std::string ip() const { return _ip; }
+  int port() const { return _port; }
+
 private:
   virtual bool execute_process() = 0;
 

@@ -169,13 +169,16 @@ public:
 
   /// Creates and starts up a dnsmasq instance to allow the store to find
   /// Astaire instances.
-  static void create_and_start_dns_for_astaire(int astaire_instances)
+  static void create_and_start_dns_for_astaire(
+    const std::vector<std::shared_ptr<AstaireInstance>>& astaires)
   {
     std::vector<std::string> hosts;
 
-    for (int ii = 0; ii < astaire_instances; ++ii)
+    for(std::vector<std::shared_ptr<AstaireInstance>>::const_iterator instance = astaires.begin();
+        instance != astaires.end();
+        ++instance)
     {
-      hosts.push_back("127.0.0." + std::to_string(ii + 1));
+      hosts.push_back((*instance)->ip());
     }
 
     _dnsmasq_instance = std::shared_ptr<DnsmasqInstance>(
@@ -322,7 +325,7 @@ class ParameterizedMemcachedSolutionTest : public BaseMemcachedSolutionTest
   {
     create_and_start_memcached_instances(T::num_memcached_instances());
     create_and_start_astaire_instances(T::num_astaire_instances());
-    create_and_start_dns_for_astaire(T::num_astaire_instances());
+    create_and_start_dns_for_astaire(_astaire_instances);
 
     BaseMemcachedSolutionTest::SetUpTestCase();
   }
@@ -422,7 +425,7 @@ class SimpleMemcachedSolutionTest : public BaseMemcachedSolutionTest
   {
     create_and_start_memcached_instances(2);
     create_and_start_astaire_instances(2);
-    create_and_start_dns_for_astaire(2);
+    create_and_start_dns_for_astaire(_astaire_instances);
 
     BaseMemcachedSolutionTest::SetUpTestCase();
   }
@@ -910,9 +913,12 @@ TYPED_TEST(MemcachedSolutionFailureTest, AddKillSetSetDataContentionSet)
     EXPECT_EQ(data_out, data_in);
 
     TypeParam::fix_failure(this);
+    usleep(50000);
 
-    // Bounce the store to prevent failures in this iteration from affecting
-    // the next one.
+    // Bounce the store to prevent the failures in this loop iteration from
+    // affecting the next one. Although the test fixture tears down the store
+    // when it is destroyed, all of the iterations take place in the same
+    // fixture.
     delete this->_store; this->_store = NULL;
     this->_store = new TopologyNeutralMemcachedStore("astaire.local",
                                                      this->_resolver);
