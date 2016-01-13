@@ -710,7 +710,6 @@ TEST_F(SimpleMemcachedSolutionTest, ConnectUsingIpAddress)
   EXPECT_EQ(Store::Status::NOT_FOUND, rc);
 }
 
-
 TEST_F(SimpleMemcachedSolutionTest, BadDomainName)
 {
   delete _store; _store = NULL;
@@ -729,6 +728,38 @@ TEST_F(SimpleMemcachedSolutionTest, BadDomainName)
 
   rc = this->delete_data();
   EXPECT_EQ(Store::Status::ERROR, rc);
+}
+
+TEST_F(SimpleMemcachedSolutionTest, DomainAndPort)
+{
+  delete _store; _store = NULL;
+  _store = new TopologyNeutralMemcachedStore("astaire.local:11311", _resolver);
+
+  uint64_t cas = 0;
+  Store::Status rc;
+  std::string data_in = "SimpleMemcachedSolutionTest.AddGet";
+  std::string data_out;
+
+  rc = this->set_data(data_in, cas);
+  EXPECT_EQ(Store::Status::OK, rc);
+
+  rc = this->get_data(data_out, cas);
+  EXPECT_EQ(Store::Status::OK, rc);
+  EXPECT_EQ(data_out, data_in);
+
+  data_in = "SimpleMemcachedSolutionTest.AddGet_1";
+  rc = this->set_data(data_in, cas);
+  EXPECT_EQ(Store::Status::OK, rc);
+
+  rc = this->get_data(data_out, cas);
+  EXPECT_EQ(Store::Status::OK, rc);
+  EXPECT_EQ(data_out, data_in);
+
+  rc = this->delete_data();
+  EXPECT_EQ(Store::Status::OK, rc);
+
+  rc = this->get_data(data_out, cas);
+  EXPECT_EQ(Store::Status::NOT_FOUND, rc);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
