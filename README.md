@@ -18,7 +18,7 @@ On Ubuntu 14.04,
 
 2.  install the required packages
 
-        sudo apt-get install git cmake make gcc g++ bison flex libsctp-dev libgnutls-dev libgcrypt-dev libidn11-dev libtool autoconf libboost-dev libboost-test-dev automake libssl-dev libcloog-ppl1 libxml2-utils valgrind memcached snmp
+        sudo apt-get install git cmake make gcc g++ bison flex libsctp-dev libgnutls-dev libgcrypt-dev libidn11-dev libtool autoconf libboost-dev libboost-test-dev automake libssl-dev libcloog-ppl1 libxml2-utils valgrind memcached snmp dnsmasq
 
 ## Getting the Code
 
