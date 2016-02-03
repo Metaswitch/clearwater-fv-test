@@ -861,23 +861,10 @@ TYPED_TEST(MemcachedSolutionFailureTest, AddKillGetExpire)
 ///
 /// Repeat this test 10 times so that we sometimes kill the primary and
 /// sometimes the backup.
-///
-/// TODO: This test case contains a few CAS loops. We should never need them but
-/// only do because of https://github.com/Metaswitch/cpp-common/issues/286. This
-/// testcase should be updated once that is fixed. However, this is actually not
-/// that bad since from the client's point of view this could easily be business
-/// as usual.
-///
-/// Why does cpp-common issue 286 result in data contention here? In the case
-/// where we restart a memcached, and it's the primary memcached, the GET to the
-/// primary memcached still fails with a CONNECTION FAILURE (even though the
-/// memcached is back up) and this can happen multiple times (since we have
-/// multiple Astaire processes).
 TYPED_TEST(MemcachedSolutionFailureTest, AddKillSetSetDataContentionSet)
 {
   for (int ii = 0; ii < 10; ++ii)
   {
-    int cas_loop_count = 0;
     this->get_new_key();
 
     SCOPED_TRACE(this->_key);
@@ -901,18 +888,15 @@ TYPED_TEST(MemcachedSolutionFailureTest, AddKillSetSetDataContentionSet)
     EXPECT_TRUE((rc == Store::Status::DATA_CONTENTION) ||
                 (rc == Store::Status::OK));
 
-    cas_loop_count = 0;
-    while ((rc == Store::Status::DATA_CONTENTION) && (cas_loop_count < 5))
+    if (rc == Store::Status::DATA_CONTENTION)
     {
       rc = this->get_data(data_out, cas);
       EXPECT_EQ(Store::Status::OK, rc);
       EXPECT_NE(data_out, data_in);
 
       rc = this->set_data(data_in, cas);
-      EXPECT_TRUE((rc == Store::Status::DATA_CONTENTION) ||
-                  (rc == Store::Status::OK));
+      EXPECT_EQ(rc, Store::Status::OK);
     }
-    EXPECT_LT(cas_loop_count, 5);
 
     std::string failed_data_in = "FAIL";
     rc = this->set_data(failed_data_in, cas);
@@ -924,27 +908,13 @@ TYPED_TEST(MemcachedSolutionFailureTest, AddKillSetSetDataContentionSet)
 
     data_in = "MemcachedSolutionFailureTest.AddKillSetSetDataContentionSet_New2";
     rc = this->set_data(data_in, cas);
-    EXPECT_TRUE((rc == Store::Status::DATA_CONTENTION) ||
-                (rc == Store::Status::OK));
-
-    cas_loop_count = 0;
-    while ((rc == Store::Status::DATA_CONTENTION) && (cas_loop_count < 5))
-    {
-      rc = this->get_data(data_out, cas);
-      EXPECT_EQ(Store::Status::OK, rc);
-      EXPECT_NE(data_out, data_in);
-
-      rc = this->set_data(data_in, cas);
-      EXPECT_EQ(Store::Status::OK, rc);
-    }
-    EXPECT_LT(cas_loop_count, 5);
+    EXPECT_EQ(rc, Store::Status::OK);
 
     rc = this->get_data(data_out, cas);
     EXPECT_EQ(Store::Status::OK, rc);
     EXPECT_EQ(data_out, data_in);
 
     TypeParam::fix_failure(this);
-    usleep(50000);
 
     // Bounce the store to prevent the failures in this loop iteration from
     // affecting the next one. Although the test fixture tears down the store
@@ -1003,31 +973,15 @@ TYPED_TEST(MemcachedSolutionFailureTest, AddKillCASDelete)
   EXPECT_EQ(Store::Status::OK, rc);
   EXPECT_EQ(data_out, data_in);
 
+  // "Delete" the data by writing a record with a TTL of 0.
   data_in = "DELETE";
   rc = this->set_data(data_in, cas, 0);
+  EXPECT_EQ(Store::Status::OK, rc);
 
-  // TODO: We should never receive DATA_CONTENTION here - we only do so because
-  // of https://github.com/Metaswitch/cpp-common/issues/286. This testcase
-  // should be updated once that is fixed. However, this is actually not that
-  // bad since from the client's point of view this could easily be business as
-  // usual.
-  //
-  // Why does cpp-common issue 286 result in data contention here? In the case
-  // where we restart a memcached, and it's the primary memcached, the GET to
-  // the primary memcached still fails with a CONNECTION FAILURE (even though
-  // the memcached is back up). However, the SET would now work fine, apart from
-  // the fact that we're using the wrong CAS - hence the data contention.
-  EXPECT_TRUE((rc == Store::Status::DATA_CONTENTION) ||
-              (rc == Store::Status::OK));
-
-  if (rc == Store::Status::DATA_CONTENTION)
-  {
-    rc = this->get_data(data_out, cas);
-    EXPECT_EQ(Store::Status::OK, rc);
-
-    rc = this->set_data(data_in, cas, 0);
-    EXPECT_EQ(Store::Status::OK, rc);
-  }
+  // Allow the "delete" to percolate to all nodes. If we don't sleep the next
+  // GET can beat the SET that has been sent to the backup, meaning that we
+  // actually see some data being returned.
+  usleep(5000);
 
   rc = this->get_data(data_out, cas);
   EXPECT_EQ(Store::Status::NOT_FOUND, rc);
@@ -1129,29 +1083,7 @@ TYPED_TEST(LargerClustersMemcachedSolutionTest, AddKillGetSet)
 
   data_in = "LargerClustersMemcachedSolutionTest.AddKillGetSet_New";
   rc = this->set_data(data_in, cas);
-
-  // TODO: We should never receive DATA_CONTENTION here - we only do so because
-  // of https://github.com/Metaswitch/cpp-common/issues/286. This testcase
-  // should be updated once that is fixed. However, this is actually not that
-  // bad since from the client's point of view this could easily be business as
-  // usual.
-  //
-  // Why does cpp-common issue 286 result in data contention here? In the case
-  // where we restart a memcached, and it's the primary memcached, the GET to
-  // the primary memcached still fails with a CONNECTION FAILURE (even though
-  // the memcached is back up). However, the SET would now work fine, apart from
-  // the fact that we're using the wrong CAS - hence the data contention.
-  EXPECT_TRUE((rc == Store::Status::DATA_CONTENTION) ||
-              (rc == Store::Status::OK));
-
-  if (rc == Store::Status::DATA_CONTENTION)
-  {
-    rc = this->get_data(data_out, cas);
-    EXPECT_EQ(Store::Status::OK, rc);
-
-    rc = this->set_data(data_in, cas);
-    EXPECT_EQ(Store::Status::OK, rc);
-  }
+  EXPECT_EQ(rc, Store::Status::OK);
 
   rc = this->get_data(data_out, cas);
   EXPECT_EQ(Store::Status::OK, rc);
