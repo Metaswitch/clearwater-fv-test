@@ -32,8 +32,6 @@ TARGET_SOURCES_TEST := memcachedstore.cpp \
                        dnsparser.cpp \
                        test_main.cpp \
                        test_memcachedstore.cpp \
-                       test_memcached_config.cpp \
-                       test_memcachedstoreview.cpp \
                        test_dns.cpp \
                        test_snmp.cpp \
                        processinstance.cpp
