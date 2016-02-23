@@ -64,7 +64,7 @@ CPPFLAGS += -I${ROOT}/include \
             -I${ROOT}/modules/rapidjson/include
 
 # Add cpp-common/src as a VPATH to pull in required production code
-VPATH := ${ROOT}/modules/cpp-common/src
+VPATH := ${ROOT}/modules/cpp-common/src ${ROOT}/modules/cpp-common/test_utils
 
 # Test build:
 #
