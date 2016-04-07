@@ -39,8 +39,6 @@ TARGET_SOURCES_TEST := memcachedstore.cpp \
                        dnsparser.cpp \
                        test_main.cpp \
                        test_memcachedstore.cpp \
-                       test_memcached_config.cpp \
-                       test_memcachedstoreview.cpp \
                        test_dns.cpp \
                        test_snmp.cpp \
                        processinstance.cpp \
@@ -71,7 +69,7 @@ CPPFLAGS += -I${ROOT}/include \
             -I${ROOT}/modules/cpp-common/include
 
 # Add cpp-common/src as a VPATH to pull in required production code
-VPATH := ${ROOT}/modules/cpp-common/src
+VPATH := ${ROOT}/modules/cpp-common/src ${ROOT}/modules/cpp-common/test_utils
 
 # Test build:
 #
