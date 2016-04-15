@@ -43,7 +43,7 @@ TEST_F(SNMPTest, ScalarValue)
   // Create a scalar
   SNMP::U32Scalar scalar("answer", test_oid);
   scalar.value = 42;
-  
+
   // Check that it has the right OID, value and type
   ASSERT_EQ(42, snmp_get(".1.2.2"));
 }
@@ -59,7 +59,7 @@ TEST_F(SNMPTest, TableOrdering)
   // Check that the table has the right number of entries (3 time periods * five
   // entries)
   ASSERT_EQ(15, entries.size());
-  
+
   // Check that they come in the right order - column 2 of row 1, column 2 of row 2, column 2 of row
   // 3, column 3 of row 1, column 3 of row 2....
   ASSERT_EQ(".1.2.2.1.2.1 = 0", entries[0]);
@@ -166,7 +166,7 @@ TEST_F(SNMPTest, IPCountTable)
   SNMP::IPCountTable* tbl = SNMP::IPCountTable::create("ip-counter", test_oid);
 
   tbl->get("127.0.0.1")->increment();
-  
+
   // Shell out to snmpwalk to find all entries in that table
   std::vector<std::string> entries = snmp_walk(".1.2.2");
 
@@ -178,7 +178,7 @@ TEST_F(SNMPTest, IPCountTable)
 TEST_F(SNMPTest, SuccessFailCountTable)
 {
   cwtest_completely_control_time();
-  
+
   // Create table
   SNMP::SuccessFailCountTable* tbl = SNMP::SuccessFailCountTable::create("success_fail_count", test_oid);
 
@@ -431,10 +431,10 @@ TEST_F(SNMPTest, ContinuousAccumulatorTable)
 TEST_F(SNMPTest, CxCounterTable)
 {
   cwtest_completely_control_time();
-  
+
   // Create table
   SNMP::CxCounterTable* tbl = SNMP::CxCounterTable::create("cx_counter", test_oid);
-  
+
   // Check that the rows that are there are the ones we expect and that initial
   // values are zero.
   std::vector<std::string> entries = snmp_walk(".1.2.2");
@@ -452,7 +452,7 @@ TEST_F(SNMPTest, CxCounterTable)
   ASSERT_EQ(".1.2.2.1.4.1.1.2001 = 0", entries[33]);
   ASSERT_EQ(".1.2.2.1.4.1.1.2002 = 0", entries[34]);
   ASSERT_EQ(".1.2.2.1.4.1.1.2003 = 0", entries[35]);
-  
+
   tbl->increment(SNMP::DiameterAppId::BASE, 2001);
   tbl->increment(SNMP::DiameterAppId::_3GPP, 5011);
 
@@ -469,6 +469,198 @@ TEST_F(SNMPTest, CxCounterTable)
   cwtest_advance_time_ms(5000);
   ASSERT_EQ(1, snmp_get(".1.2.2.1.4.1.0.2001"));
   ASSERT_EQ(1, snmp_get(".1.2.2.1.4.1.1.5011"));
+
+  cwtest_reset_time();
+  delete tbl;
+}
+
+TEST_F(SNMPTest, IPTimeBasedCounterTableSingleIPZeroCount)
+{
+  cwtest_completely_control_time();
+
+  // Create table
+  SNMP::IPTimeBasedCounterTable* tbl =
+    SNMP::IPTimeBasedCounterTable::create("ip_time_based_counter", test_oid);
+
+  // Add an IP.
+  tbl->add_ip("192.168.0.1");
+
+  // Advance time so we can see any counts in the prev 5s row.
+  cwtest_advance_time_ms(5000);
+
+  // All counts should be zero.
+  std::vector<std::string> entries = snmp_walk(".1.2.2");
+
+  EXPECT_EQ(entries.size(), 3);
+  EXPECT_EQ(".1.2.2.1.4.1.4.192.168.0.1.1 = 0", entries[0]);
+  EXPECT_EQ(".1.2.2.1.4.1.4.192.168.0.1.2 = 0", entries[1]);
+  EXPECT_EQ(".1.2.2.1.4.1.4.192.168.0.1.3 = 0", entries[2]);
+
+  cwtest_reset_time();
+  delete tbl;
+}
+
+TEST_F(SNMPTest, IPTimeBasedCounterTableSingleIP)
+{
+  cwtest_completely_control_time();
+
+  // Create table
+  SNMP::IPTimeBasedCounterTable* tbl =
+    SNMP::IPTimeBasedCounterTable::create("ip_time_based_counter", test_oid);
+
+  // Add an IP and increment the count two times.
+  tbl->add_ip("192.168.0.1");
+  tbl->increment("192.168.0.1");
+  tbl->increment("192.168.0.1");
+
+  // Advance time so we can see the count in the prev 5s row.
+  cwtest_advance_time_ms(5000);
+
+  // Check that the rows that are there are the ones we expect.
+  std::vector<std::string> entries = snmp_walk(".1.2.2");
+
+  EXPECT_EQ(entries.size(), 3);
+  EXPECT_EQ(".1.2.2.1.4.1.4.192.168.0.1.1 = 2", entries[0]);
+  EXPECT_EQ(".1.2.2.1.4.1.4.192.168.0.1.2 = 2", entries[1]);
+  EXPECT_EQ(".1.2.2.1.4.1.4.192.168.0.1.3 = 0", entries[2]);
+
+  cwtest_reset_time();
+  delete tbl;
+}
+
+TEST_F(SNMPTest, IPTimeBasedCounterTableMultipleIPs)
+{
+  cwtest_completely_control_time();
+
+  // Create table
+  SNMP::IPTimeBasedCounterTable* tbl =
+    SNMP::IPTimeBasedCounterTable::create("ip_time_based_counter", test_oid);
+
+  // Add three IPs and increment some counts.
+  tbl->add_ip("192.168.0.1");
+  tbl->increment("192.168.0.1");
+
+  tbl->add_ip("192.168.0.2");
+  tbl->increment("192.168.0.2");
+  tbl->increment("192.168.0.2");
+
+  tbl->add_ip("192.168.0.3");
+  tbl->increment("192.168.0.3");
+  tbl->increment("192.168.0.3");
+  tbl->increment("192.168.0.3");
+
+  // Advance time so we can see the count in the prev 5s row.
+  cwtest_advance_time_ms(5000);
+
+  // Check that the rows that are there are the ones we expect.
+  std::vector<std::string> entries = snmp_walk(".1.2.2");
+
+  EXPECT_EQ(entries.size(), 9);
+  EXPECT_EQ(".1.2.2.1.4.1.4.192.168.0.1.1 = 1", entries[0]);
+  EXPECT_EQ(".1.2.2.1.4.1.4.192.168.0.1.2 = 1", entries[1]);
+  EXPECT_EQ(".1.2.2.1.4.1.4.192.168.0.1.3 = 0", entries[2]);
+  EXPECT_EQ(".1.2.2.1.4.1.4.192.168.0.2.1 = 2", entries[3]);
+  EXPECT_EQ(".1.2.2.1.4.1.4.192.168.0.2.2 = 2", entries[4]);
+  EXPECT_EQ(".1.2.2.1.4.1.4.192.168.0.2.3 = 0", entries[5]);
+  EXPECT_EQ(".1.2.2.1.4.1.4.192.168.0.3.1 = 3", entries[6]);
+  EXPECT_EQ(".1.2.2.1.4.1.4.192.168.0.3.2 = 3", entries[7]);
+  EXPECT_EQ(".1.2.2.1.4.1.4.192.168.0.3.3 = 0", entries[8]);
+
+  cwtest_reset_time();
+  delete tbl;
+}
+
+TEST_F(SNMPTest, IPTimeBasedCounterTableRemoveIP)
+{
+  cwtest_completely_control_time();
+
+  // Create table
+  SNMP::IPTimeBasedCounterTable* tbl =
+    SNMP::IPTimeBasedCounterTable::create("ip_time_based_counter", test_oid);
+
+  // Add two IPs and increment some counts.
+  tbl->add_ip("192.168.0.1");
+  tbl->increment("192.168.0.1");
+
+  tbl->add_ip("192.168.0.2");
+  tbl->increment("192.168.0.2");
+  tbl->increment("192.168.0.2");
+
+  // Advance time so we can see the count in the prev 5s row.
+  cwtest_advance_time_ms(5000);
+
+  // Check that the rows that are there are the ones we expect.
+  std::vector<std::string> entries = snmp_walk(".1.2.2");
+
+  EXPECT_EQ(entries.size(), 6);
+  EXPECT_EQ(".1.2.2.1.4.1.4.192.168.0.1.1 = 1", entries[0]);
+  EXPECT_EQ(".1.2.2.1.4.1.4.192.168.0.1.2 = 1", entries[1]);
+  EXPECT_EQ(".1.2.2.1.4.1.4.192.168.0.1.3 = 0", entries[2]);
+  EXPECT_EQ(".1.2.2.1.4.1.4.192.168.0.2.1 = 2", entries[3]);
+  EXPECT_EQ(".1.2.2.1.4.1.4.192.168.0.2.2 = 2", entries[4]);
+  EXPECT_EQ(".1.2.2.1.4.1.4.192.168.0.2.3 = 0", entries[5]);
+
+  // Delete a row and check it disappears from the table.
+  tbl->remove_ip("192.168.0.1");
+
+  entries = snmp_walk(".1.2.2");
+  EXPECT_EQ(entries.size(), 3);
+  EXPECT_EQ(".1.2.2.1.4.1.4.192.168.0.2.1 = 2", entries[0]);
+  EXPECT_EQ(".1.2.2.1.4.1.4.192.168.0.2.2 = 2", entries[1]);
+  EXPECT_EQ(".1.2.2.1.4.1.4.192.168.0.2.3 = 0", entries[2]);
+
+  cwtest_reset_time();
+  delete tbl;
+}
+
+
+TEST_F(SNMPTest, IPTimeBasedCounterTableAddCountsAgeOut)
+{
+  cwtest_completely_control_time();
+
+  // Create table
+  SNMP::IPTimeBasedCounterTable* tbl =
+    SNMP::IPTimeBasedCounterTable::create("ip_time_based_counter", test_oid);
+
+  tbl->add_ip("192.168.0.1");
+  tbl->increment("192.168.0.1");
+
+  // Initially the count should only be non-zero in the current 5min row.
+  std::vector<std::string> entries = snmp_walk(".1.2.2");
+
+  EXPECT_EQ(entries.size(), 3);
+  EXPECT_EQ(".1.2.2.1.4.1.4.192.168.0.1.1 = 0", entries[0]);
+  EXPECT_EQ(".1.2.2.1.4.1.4.192.168.0.1.2 = 1", entries[1]);
+  EXPECT_EQ(".1.2.2.1.4.1.4.192.168.0.1.3 = 0", entries[2]);
+
+  // After 5s the count appears in the previous 5s row.
+  cwtest_advance_time_ms(5000);
+  entries = snmp_walk(".1.2.2");
+  EXPECT_EQ(entries.size(), 3);
+  EXPECT_EQ(".1.2.2.1.4.1.4.192.168.0.1.1 = 1", entries[0]);
+
+  // After another 5s the count disappears in the previous 5s row.
+  cwtest_advance_time_ms(5000);
+  entries = snmp_walk(".1.2.2");
+  EXPECT_EQ(entries.size(), 3);
+  EXPECT_EQ(".1.2.2.1.4.1.4.192.168.0.1.1 = 0", entries[0]);
+
+  // After another 4m50s the count moves from the current 5min row to the
+  // previous 5min row.
+  cwtest_advance_time_ms(5 * 60 * 1000 - 5000);
+  entries = snmp_walk(".1.2.2");
+  EXPECT_EQ(entries.size(), 3);
+  EXPECT_EQ(".1.2.2.1.4.1.4.192.168.0.1.1 = 0", entries[0]);
+  EXPECT_EQ(".1.2.2.1.4.1.4.192.168.0.1.2 = 0", entries[1]);
+  EXPECT_EQ(".1.2.2.1.4.1.4.192.168.0.1.3 = 1", entries[2]);
+
+  // After another 5 mins the counts have disappeared entirely. .
+  cwtest_advance_time_ms(5 * 60 * 1000);
+  entries = snmp_walk(".1.2.2");
+  EXPECT_EQ(entries.size(), 3);
+  EXPECT_EQ(".1.2.2.1.4.1.4.192.168.0.1.1 = 0", entries[0]);
+  EXPECT_EQ(".1.2.2.1.4.1.4.192.168.0.1.2 = 0", entries[1]);
+  EXPECT_EQ(".1.2.2.1.4.1.4.192.168.0.1.3 = 0", entries[2]);
 
   cwtest_reset_time();
   delete tbl;
