@@ -83,7 +83,7 @@ bool ProcessInstance::kill_instance()
   if (kill(_pid, SIGTERM) == 0)
   {
     waitpid(_pid, &status, 0);
-    return WIFSIGNALED(status);
+    return (WIFSIGNALED(status) || WIFEXITED(status));
   }
   else
   {
@@ -122,6 +122,11 @@ bool ProcessInstance::wait_for_instance()
   int attempts = 0;
 
   // If the process hasn't come up after 5 seconds, call the whole thing off.
+  //
+  // Sleep a little bit to begin with to allow the instance to come up,
+  // otherwise we are almost guaranteed to wait for at least 1s.
+  usleep(10000);
+
   while ((!connected) && (attempts < 5))
   {
     if (connect(sockfd, res->ai_addr, res->ai_addrlen) == 0)
@@ -139,6 +144,57 @@ bool ProcessInstance::wait_for_instance()
   freeaddrinfo(res);
 
   return connected;
+}
+
+bool MemcachedInstance::execute_process()
+{
+  // Start memcached. execlp only returns if an error has occurred, in which
+  // case return false.
+  execlp("/usr/bin/memcached",
+         "memcached",
+         "-l",
+         "127.0.0.1",
+         "-p",
+         std::to_string(_port).c_str(),
+         (char*)NULL);
+  perror("execlp");
+  return false;
+}
+
+bool AstaireInstance::execute_process()
+{
+  // Run Astaire at the same log level as the tests by parsing the NOISY=t:?
+  // environment variable.
+  int log_level = 0;
+  char* val = getenv("NOISY");
+  if ((val != NULL) && (strchr("TtYy", val[0]) != NULL))
+  {
+    if (val != NULL)
+    {
+      val = strchr(val, ':');
+
+      if (val != NULL)
+      {
+        log_level = strtol(val + 1, NULL, 10);
+      }
+    }
+  }
+
+  // Start Astaire. execlp only returns if an error has occurred, in which case
+  // return false. This assumes that cluster_settings has been setup.
+  execlp("../modules/astaire/build/bin/astaire",
+         "astaire",
+         "--local-name",
+         "127.0.0.1",
+         "--bind-addr",
+         _ip.c_str(),
+         "--cluster-settings-file",
+         "./cluster_settings",
+         "--log-level",
+         std::to_string(log_level).c_str(),
+         (char*)NULL);
+  perror("execlp");
+  return false;
 }
 
 void DnsmasqInstance::write_config(std::map<std::string, std::vector<std::string>> a_records)

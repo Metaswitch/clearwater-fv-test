@@ -12,7 +12,7 @@ MODULE_DIR := ${ROOT}/modules
 INCLUDE_DIR := ${INSTALL_DIR}/include
 LIB_DIR := ${INSTALL_DIR}/lib
 
-SUBMODULES := libmemcached sas-client
+SUBMODULES := astaire
 
 include $(patsubst %, ${MK_DIR}/%.mk, ${SUBMODULES})
 include ${MK_DIR}/fvtest.mk
@@ -24,11 +24,9 @@ test: ${SUBMODULES} fvtest_test
 testall: $(patsubst %, %_test, ${SUBMODULES}) test
 
 clean: $(patsubst %, %_clean, ${SUBMODULES}) fvtest_clean
-	rm -rf ${ROOT}/usr
 	rm -rf ${ROOT}/build
 
 distclean: $(patsubst %, %_distclean, ${SUBMODULES}) fvtest_distclean
-	rm -rf ${ROOT}/usr
 	rm -rf ${ROOT}/build
 
 .PHONY: all build test clean distclean

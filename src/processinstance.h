@@ -51,6 +51,9 @@ public:
   bool restart_instance();
   bool wait_for_instance();
 
+  std::string ip() const { return _ip; }
+  int port() const { return _port; }
+
 private:
   virtual bool execute_process() = 0;
 
@@ -59,16 +62,29 @@ private:
   int _pid;
 };
 
+class MemcachedInstance : public ProcessInstance
+{
+public:
+  MemcachedInstance(int port) : ProcessInstance(port) {};
+  virtual bool execute_process();
+};
+
+class AstaireInstance : public ProcessInstance
+{
+public:
+  AstaireInstance(const std::string& ip, int port) : ProcessInstance(ip, port) {};
+  virtual bool execute_process();
+};
+
 class DnsmasqInstance : public ProcessInstance
 {
 public:
   DnsmasqInstance(std::string ip, int port, std::map<std::string, std::vector<std::string>> a_records) :
     ProcessInstance(ip, port) { write_config(a_records); };
   ~DnsmasqInstance() { std::remove(_cfgfile.c_str()); };
-  
+
   bool execute_process();
 private:
   void write_config(std::map<std::string, std::vector<std::string>> a_records);
   std::string _cfgfile;
 };
-
