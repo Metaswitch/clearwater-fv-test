@@ -9,6 +9,7 @@ cleanup()
   if [[ $MEMCACHED_PID != 0 ]]; then
     kill -TERM $MEMCACHED_PID
   fi
+  sleep 1
 }
 
 trap cleanup EXIT
