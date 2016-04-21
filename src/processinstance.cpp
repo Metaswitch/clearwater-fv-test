@@ -156,6 +156,8 @@ bool MemcachedInstance::execute_process()
          "127.0.0.1",
          "-p",
          std::to_string(_port).c_str(),
+         "-e",
+         "ignore_vbucket=true",
          (char*)NULL);
   perror("execlp");
   return false;
