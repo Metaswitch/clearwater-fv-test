@@ -197,7 +197,7 @@ public:
          inst != _memcached_instances.end();
          ++inst)
     {
-      (*inst)->wait_for_instance();
+      success = (*inst)->wait_for_instance();
 
       if (!success)
       {
@@ -209,7 +209,7 @@ public:
          inst != _astaire_instances.end();
          ++inst)
     {
-      (*inst)->wait_for_instance();
+      success = (*inst)->wait_for_instance();
 
       if (!success)
       {
@@ -219,7 +219,7 @@ public:
 
     if (_dnsmasq_instance)
     {
-      _dnsmasq_instance->wait_for_instance();
+      success = _dnsmasq_instance->wait_for_instance();
 
       if (!success)
       {
