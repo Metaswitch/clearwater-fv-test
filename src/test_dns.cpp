@@ -40,7 +40,7 @@
 class DNSTest : public ::testing::Test
 {
   DNSTest() {};
-  
+
 };
 
 TEST_F(DNSTest, BasicQuery)
@@ -50,7 +50,7 @@ TEST_F(DNSTest, BasicQuery)
   server.wait_for_instance();
   // Send a DNS query to confirm it doesn't leak memory
   DnsCachedResolver* r = new DnsCachedResolver("127.0.0.201", 5353);
-  DnsResult answer = r->dns_query("test.query", ns_t_a);
+  DnsResult answer = r->dns_query("test.query", ns_t_a, 0);
   ASSERT_EQ(answer.records().size(), 2);
   delete r;
 }
