@@ -44,8 +44,10 @@ TEST_F(SNMPTest, ScalarValue)
   SNMP::U32Scalar scalar("answer", test_oid);
   scalar.value = 42;
 
-  // Check that it has the right OID, value and type
-  ASSERT_EQ(42, snmp_get(".1.2.2"));
+  // Check that it has the right OID, value and type. Note that OID scalars are
+  // exposed under an additional element with the value 0, hence the trailing
+  // ".0".
+  ASSERT_EQ(42, snmp_get(".1.2.2.0"));
 }
 
 TEST_F(SNMPTest, TableOrdering)
