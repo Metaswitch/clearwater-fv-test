@@ -502,6 +502,69 @@ TEST_F(SNMPTest, IPTimeBasedCounterTableSingleIPZeroCount)
   delete tbl;
 }
 
+TEST_F(SNMPTest, IPTimeBasedCounterTableRefcountIP)
+{
+  cwtest_completely_control_time();
+
+  // Create table
+  SNMP::IPTimeBasedCounterTable* tbl =
+    SNMP::IPTimeBasedCounterTable::create("ip_time_based_counter", test_oid);
+
+  // Add an IP and increment the count two times.
+  tbl->add_ip("192.168.0.1");
+  tbl->increment("192.168.0.1");
+  tbl->increment("192.168.0.1");
+
+  // Increment and then decrement the reference count
+  // so we can check that the entry remains anyway.
+  tbl->add_ip("192.168.0.1");
+  tbl->remove_ip("192.168.0.1");
+
+  // Advance time so we can see the count in the prev 5s row.
+  cwtest_advance_time_ms(5000);
+
+  // Check that the rows that are there are the ones we expect.
+  std::vector<std::string> entries = snmp_walk(".1.2.2");
+
+  EXPECT_EQ(entries.size(), 3);
+  EXPECT_EQ(".1.2.2.1.4.1.4.192.168.0.1.1 = 2", entries[0]);
+  EXPECT_EQ(".1.2.2.1.4.1.4.192.168.0.1.2 = 2", entries[1]);
+  EXPECT_EQ(".1.2.2.1.4.1.4.192.168.0.1.3 = 0", entries[2]);
+
+  cwtest_reset_time();
+  delete tbl;
+}
+
+TEST_F(SNMPTest, IPTimeBasedCounterTableRefcountDeleteIP)
+{
+  cwtest_completely_control_time();
+
+  // Create table
+  SNMP::IPTimeBasedCounterTable* tbl =
+    SNMP::IPTimeBasedCounterTable::create("ip_time_based_counter", test_oid);
+
+  // Add an IP and increment the count two times.
+  tbl->add_ip("192.168.0.1");
+  tbl->increment("192.168.0.1");
+  tbl->increment("192.168.0.1");
+
+  // Chck that the IP is correcttly removed if we decrease the count to zero.
+  tbl->add_ip("192.168.0.1");
+  tbl->remove_ip("192.168.0.1");
+  tbl->remove_ip("192.168.0.1");
+
+  // Advance time so we would see the count in the prev 5s row.
+  cwtest_advance_time_ms(5000);
+
+  // Check that the rows for the IP have been removed.
+  std::vector<std::string> entries = snmp_walk(".1.2.2");
+
+  EXPECT_EQ(entries.size(), 0);
+
+  cwtest_reset_time();
+  delete tbl;
+}
+
 TEST_F(SNMPTest, IPTimeBasedCounterTableSingleIP)
 {
   cwtest_completely_control_time();
