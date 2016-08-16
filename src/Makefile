@@ -19,6 +19,7 @@ TARGET_SOURCES_TEST := memcachedstore.cpp \
                        baseresolver.cpp \
                        astaire_resolver.cpp \
                        utils.cpp \
+                       memcachedconnectionpool.cpp \
                        memcachedstoreview.cpp \
                        memcached_config.cpp \
                        signalhandler.cpp \
