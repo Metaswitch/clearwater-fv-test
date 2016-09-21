@@ -75,7 +75,7 @@ TEST_F(SNMPTest, TableOrdering)
 
 TEST_F(SNMPTest, LatencyCalculations)
 {
-  cwtest_completely_control_time();
+  cwtest_completely_control_time(true);
 
   // Create a table
   SNMP::EventAccumulatorTable* tbl = SNMP::EventAccumulatorTable::create("latency", test_oid);
@@ -113,7 +113,7 @@ TEST_F(SNMPTest, LatencyCalculations)
 
 TEST_F(SNMPTest, CounterTimePeriods)
 {
-  cwtest_completely_control_time();
+  cwtest_completely_control_time(true);
   // Create a table indexed by time period
   SNMP::CounterTable* tbl = SNMP::CounterTable::create("counter", test_oid);
 
@@ -179,7 +179,7 @@ TEST_F(SNMPTest, IPCountTable)
 
 TEST_F(SNMPTest, SuccessFailCountTable)
 {
-  cwtest_completely_control_time();
+  cwtest_completely_control_time(true);
 
   // Create table
   SNMP::SuccessFailCountTable* tbl = SNMP::SuccessFailCountTable::create("success_fail_count", test_oid);
@@ -206,7 +206,7 @@ TEST_F(SNMPTest, SuccessFailCountTable)
 
 TEST_F(SNMPTest, SingleCountByNodeTypeTable)
 {
-  cwtest_completely_control_time();
+  cwtest_completely_control_time(true);
 
   // Create a table
   SNMP::SingleCountByNodeTypeTable* tbl = SNMP::SingleCountByNodeTypeTable::create("single-count", test_oid, {SNMP::NodeTypes::SCSCF, SNMP::NodeTypes::ICSCF});
@@ -247,7 +247,7 @@ TEST_F(SNMPTest, SingleCountByNodeTypeTable)
 
 TEST_F(SNMPTest, SuccessFailCountByRequestTypeTable)
 {
-  cwtest_completely_control_time();
+  cwtest_completely_control_time(true);
 
   // Create a table
   SNMP::SuccessFailCountByRequestTypeTable* tbl = SNMP::SuccessFailCountByRequestTypeTable::create("success_fail_by_request", test_oid);
@@ -354,7 +354,7 @@ void jump_to_next_periodstart(uint32_t interval_ms)
 
 TEST_F(SNMPTest, ContinuousAccumulatorTable)
 {
-  cwtest_completely_control_time();
+  cwtest_completely_control_time(true);
 
   // Consider a 5 minute period
   jump_to_next_periodstart(300000);
@@ -432,7 +432,7 @@ TEST_F(SNMPTest, ContinuousAccumulatorTable)
 
 TEST_F(SNMPTest, CxCounterTable)
 {
-  cwtest_completely_control_time();
+  cwtest_completely_control_time(true);
 
   // Create table
   SNMP::CxCounterTable* tbl = SNMP::CxCounterTable::create("cx_counter", test_oid);
@@ -478,7 +478,7 @@ TEST_F(SNMPTest, CxCounterTable)
 
 TEST_F(SNMPTest, IPTimeBasedCounterTableSingleIPZeroCount)
 {
-  cwtest_completely_control_time();
+  cwtest_completely_control_time(true);
 
   // Create table
   SNMP::IPTimeBasedCounterTable* tbl =
@@ -504,7 +504,7 @@ TEST_F(SNMPTest, IPTimeBasedCounterTableSingleIPZeroCount)
 
 TEST_F(SNMPTest, IPTimeBasedCounterTableRefcountIP)
 {
-  cwtest_completely_control_time();
+  cwtest_completely_control_time(true);
 
   // Create table
   SNMP::IPTimeBasedCounterTable* tbl =
@@ -537,7 +537,7 @@ TEST_F(SNMPTest, IPTimeBasedCounterTableRefcountIP)
 
 TEST_F(SNMPTest, IPTimeBasedCounterTableRefcountDeleteIP)
 {
-  cwtest_completely_control_time();
+  cwtest_completely_control_time(true);
 
   // Create table
   SNMP::IPTimeBasedCounterTable* tbl =
@@ -567,7 +567,7 @@ TEST_F(SNMPTest, IPTimeBasedCounterTableRefcountDeleteIP)
 
 TEST_F(SNMPTest, IPTimeBasedCounterTableSingleIP)
 {
-  cwtest_completely_control_time();
+  cwtest_completely_control_time(true);
 
   // Create table
   SNMP::IPTimeBasedCounterTable* tbl =
@@ -595,7 +595,7 @@ TEST_F(SNMPTest, IPTimeBasedCounterTableSingleIP)
 
 TEST_F(SNMPTest, IPTimeBasedCounterTableMultipleIPs)
 {
-  cwtest_completely_control_time();
+  cwtest_completely_control_time(true);
 
   // Create table
   SNMP::IPTimeBasedCounterTable* tbl =
@@ -637,7 +637,7 @@ TEST_F(SNMPTest, IPTimeBasedCounterTableMultipleIPs)
 
 TEST_F(SNMPTest, IPTimeBasedCounterTableRemoveIP)
 {
-  cwtest_completely_control_time();
+  cwtest_completely_control_time(true);
 
   // Create table
   SNMP::IPTimeBasedCounterTable* tbl =
@@ -681,7 +681,7 @@ TEST_F(SNMPTest, IPTimeBasedCounterTableRemoveIP)
 
 TEST_F(SNMPTest, IPTimeBasedCounterTableAddCountsAgeOut)
 {
-  cwtest_completely_control_time();
+  cwtest_completely_control_time(true);
 
   // Create table
   SNMP::IPTimeBasedCounterTable* tbl =
