@@ -69,7 +69,8 @@ CPPFLAGS += -Wno-write-strings \
             -ggdb3 -std=c++0x
 CPPFLAGS += -I${ROOT}/include \
             -I${ASTAIRE_INCLUDES} \
-            -I${ROOT}/modules/cpp-common/include
+            -I${ROOT}/modules/cpp-common/include \
+            -I${ROOT}/modules/rapidjson/include
 
 # Add cpp-common/src as a VPATH to pull in required production code
 VPATH := ${ROOT}/modules/cpp-common/src ${ROOT}/modules/cpp-common/test_utils

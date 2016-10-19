@@ -7,3 +7,6 @@
 [submodule "modules/astaire"]
 	path = modules/astaire
 	url = git@github.com:Metaswitch/astaire.git
+[submodule "modules/rapidjson"]
+	path = modules/rapidjson
+	url = git@github.com:miloyip/rapidjson.git
