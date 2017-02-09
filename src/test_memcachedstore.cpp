@@ -222,7 +222,7 @@ public:
   virtual void SetUp()
   {
     MemcachedTest::SetUp();
-    _store = new MemcachedStore(false, new T());
+    _store = new MemcachedStore(false, new T(), true);
   }
 
   virtual void TearDown()
@@ -382,7 +382,7 @@ public:
   virtual void SetUp()
   {
     MemcachedTest::SetUp();
-    _store = new MemcachedStore(false, new TombstoneConfig());
+    _store = new MemcachedStore(false, new TombstoneConfig(), true);
   }
 
   virtual void TearDown()
@@ -433,8 +433,8 @@ public:
   virtual void SetUp()
   {
     MemcachedTest::SetUp();
-    _uplevel_store = new MemcachedStore(false, new TombstoneConfig());
-    _downlevel_store = new MemcachedStore(false, new NoTombstoneConfig());
+    _uplevel_store = new MemcachedStore(false, new TombstoneConfig(), true);
+    _downlevel_store = new MemcachedStore(false, new NoTombstoneConfig(), true);
   }
 
   virtual void TearDown()
