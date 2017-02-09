@@ -98,7 +98,7 @@ public:
   {
     _dns_client = new DnsCachedResolver("127.0.0.1", 5353);
     _resolver = new AstaireResolver(_dns_client, AF_INET);
-    _store = new TopologyNeutralMemcachedStore("astaire.local", _resolver);
+    _store = new TopologyNeutralMemcachedStore("astaire.local", _resolver, true);
 
     // Create a new key for every test (to prevent tests from interacting with
     // each other).
@@ -681,7 +681,7 @@ TEST_F(SimpleMemcachedSolutionTest, AddDeleteSetDataContention)
 TEST_F(SimpleMemcachedSolutionTest, ConnectUsingIpAddress)
 {
   delete _store; _store = NULL;
-  _store = new TopologyNeutralMemcachedStore("127.0.0.1", _resolver);
+  _store = new TopologyNeutralMemcachedStore("127.0.0.1", _resolver, true);
 
   uint64_t cas = 0;
   Store::Status rc;
@@ -713,7 +713,7 @@ TEST_F(SimpleMemcachedSolutionTest, ConnectUsingIpAddress)
 TEST_F(SimpleMemcachedSolutionTest, BadDomainName)
 {
   delete _store; _store = NULL;
-  _store = new TopologyNeutralMemcachedStore("bad.domain.name", _resolver);
+  _store = new TopologyNeutralMemcachedStore("bad.domain.name", _resolver, true);
 
   uint64_t cas = 0;
   Store::Status rc;
@@ -733,7 +733,7 @@ TEST_F(SimpleMemcachedSolutionTest, BadDomainName)
 TEST_F(SimpleMemcachedSolutionTest, DomainAndPort)
 {
   delete _store; _store = NULL;
-  _store = new TopologyNeutralMemcachedStore("astaire.local:11311", _resolver);
+  _store = new TopologyNeutralMemcachedStore("astaire.local:11311", _resolver, true);
 
   uint64_t cas = 0;
   Store::Status rc;
@@ -922,7 +922,8 @@ TYPED_TEST(MemcachedSolutionFailureTest, AddKillSetSetDataContentionSet)
     // fixture.
     delete this->_store; this->_store = NULL;
     this->_store = new TopologyNeutralMemcachedStore("astaire.local",
-                                                     this->_resolver);
+                                                     this->_resolver,
+                                                     true);
   }
 }
 
