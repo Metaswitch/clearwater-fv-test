@@ -41,7 +41,6 @@ TARGET_SOURCES_TEST := memcachedstore.cpp \
                        dnscachedresolver.cpp \
                        dnsparser.cpp \
                        test_main.cpp \
-                       test_memcachedstore.cpp \
                        test_dns.cpp \
                        test_snmp.cpp \
                        processinstance.cpp \
