@@ -36,6 +36,7 @@ TARGET_SOURCES_TEST := memcachedstore.cpp \
                        snmp_single_count_by_node_type_table.cpp \
                        snmp_success_fail_count_by_request_type_table.cpp \
                        snmp_ip_time_based_counter_table.cpp \
+                       snmp_time_and_string_based_event_table.cpp \
                        snmp_scalar.cpp \
                        log.cpp \
                        logger.cpp \
