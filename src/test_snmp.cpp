@@ -12,6 +12,7 @@
 #endif
 
 #include "test_snmp.h"
+#include <string>
 
 TEST_F(SNMPTest, ScalarValue)
 {
@@ -81,6 +82,62 @@ TEST_F(SNMPTest, LatencyCalculations)
   ASSERT_EQ(300, snmp_get(".1.2.2.1.5.1"));
   // Count should be 2
   ASSERT_EQ(2, snmp_get(".1.2.2.1.6.1"));
+
+  cwtest_reset_time();
+  delete tbl;
+}
+
+TEST_F(SNMPTest, LatencyScopeCalculations)
+{
+  cwtest_completely_control_time(true);
+
+  // Create a table.  Use a different OID base because otherwise the indices
+  // clash with later tests.
+  SNMP::EventAccumulatorByScopeTable* tbl = SNMP::EventAccumulatorByScopeTable::create("latency", ".2.2.2");
+
+  // Just put one sample in (which should have a variance of 0).  This should
+  // show up in only the current 5 minute stats.
+  tbl->accumulate(100);
+
+  // Check the counts
+  ASSERT_EQ(0, snmp_get(".2.2.2.1.7.1.4.110.111.100.101"));
+  ASSERT_EQ(1, snmp_get(".2.2.2.1.7.2.4.110.111.100.101")); // Current 5 minutes
+  ASSERT_EQ(0, snmp_get(".2.2.2.1.7.3.4.110.111.100.101"));
+
+  // Move on five seconds. The "previous five seconds" stat should now reflect that sample.
+  cwtest_advance_time_ms(5000);
+
+  // Average should be 100
+  ASSERT_EQ(100, snmp_get(".2.2.2.1.3.1.4.110.111.100.101"));
+  // Variance should be 0
+  ASSERT_EQ(0, snmp_get(".2.2.2.1.4.1.4.110.111.100.101"));
+
+  // Now input two samples in this latency period.
+  tbl->accumulate(300);
+  tbl->accumulate(500);
+
+  // Move on five seconds. The "previous five seconds" stat should now reflect those two samples.
+  cwtest_advance_time_ms(5000);
+
+  // Average should be 400
+  ASSERT_EQ(400, snmp_get(".2.2.2.1.3.1.4.110.111.100.101"));
+  // HWM should be 500
+  ASSERT_EQ(500, snmp_get(".2.2.2.1.5.1.4.110.111.100.101"));
+  // LWM should be 300
+  ASSERT_EQ(300, snmp_get(".2.2.2.1.6.1.4.110.111.100.101"));
+  // Count should be 2
+  ASSERT_EQ(2, snmp_get(".2.2.2.1.7.1.4.110.111.100.101"));
+
+  // Move on 10 minutes.  Everything should be zero again.
+  cwtest_advance_time_ms(1000*60*10);
+
+  for (int time_period : {1, 2, 3})
+  {
+    for (int stat : {3, 4, 5, 6, 7})
+    {
+      ASSERT_EQ(0, snmp_get(".2.2.2.1." + std::to_string(stat) + "." + std::to_string(time_period) + ".4.110.111.100.101"));
+    }
+  }
 
   cwtest_reset_time();
   delete tbl;
