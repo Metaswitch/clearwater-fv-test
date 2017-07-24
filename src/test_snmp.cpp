@@ -14,6 +14,7 @@
 #include "test_snmp.h"
 #include <string>
 
+
 TEST_F(SNMPTest, ScalarValue)
 {
   // Create a scalar
@@ -93,6 +94,7 @@ TEST_F(SNMPTest, LatencyScopeCalculations)
 
   // Create a table.  Use a different OID base because otherwise the indices
   // clash with later tests.
+  // @@@@ This shouldn't be necessary -- they ought to be deleted?
   SNMP::EventAccumulatorByScopeTable* tbl = SNMP::EventAccumulatorByScopeTable::create("latency", ".2.2.2");
 
   // Just put one sample in (which should have a variance of 0).  This should
@@ -136,6 +138,134 @@ TEST_F(SNMPTest, LatencyScopeCalculations)
     for (int stat : {3, 4, 5, 6, 7})
     {
       ASSERT_EQ(0, snmp_get(".2.2.2.1." + std::to_string(stat) + "." + std::to_string(time_period) + ".4.110.111.100.101"));
+    }
+  }
+
+  cwtest_reset_time();
+  delete tbl;
+}
+
+enum EventStats
+{
+  MEAN = 1,
+  VAR = 2,
+  HWM = 3,
+  LWM = 4,
+  COUNT = 5
+};
+
+enum TimeScope
+{
+  PREV_5S = 1,
+  CURR_5M = 2,
+  PREV_5M = 3
+};
+
+TEST_F(SNMPTest, StringBasedEventStats)
+{
+  cwtest_completely_control_time(true);
+
+  // Create a table.  Use a different OID base because otherwise the indices?// clash with later tests.
+  SNMP::TimeAndStringBasedEventTable* tbl = SNMP::TimeAndStringBasedEventTable::create("Latency", ".2.2.2");
+
+  // Just put one sample in (which should have a variance of 0).  This should
+  // show up in only the current 5 minute stats.
+  std::string string1 = "server1.dc1.zone";
+  std::string string1_oid = "16.115.101.114.118.101.114.49.46.100.99.49.46.122.111.110.101";
+  std::string string2 = "server2.dc1.zone";
+  std::string string2_oid = "16.115.101.114.118.101.114.50.46.100.99.49.46.122.111.110.101";
+  tbl->accumulate(string1, 100);
+
+  //snmp_walk_debug(".2.2.2");
+
+  // Check that there are the right number of entries in the table (3 time
+  // periods * 1 string index * 5 metrics)
+  std::vector<std::string> entries = snmp_walk(".2.2.2");
+  ASSERT_EQ(15, entries.size());
+
+  // Check that there is one stat counted in the current 5m time period and
+  // nothing in the others.
+  ASSERT_EQ(1, snmp_get(time_string_event_oid(".2.2.2", COUNT, CURR_5M, string1_oid)));
+  ASSERT_EQ(0, snmp_get(time_string_event_oid(".2.2.2", COUNT, PREV_5M, string1_oid)));
+  ASSERT_EQ(0, snmp_get(time_string_event_oid(".2.2.2", COUNT, PREV_5S, string1_oid)));
+
+  // Move on five seconds. The "previous five seconds" stat should now reflect that sample.
+  cwtest_advance_time_ms(5000);
+
+  // Check that there are the right number of entries in the table (3 time
+  // periods * 1 string index * 5 metrics)
+  entries = snmp_walk(".2.2.2");
+  ASSERT_EQ(15, entries.size());
+
+  // Check that there is one stat counted in the current 5m and previous 5s
+  // periods and nothing in the previous 5m.
+  ASSERT_EQ(1, snmp_get(time_string_event_oid(".2.2.2", COUNT, CURR_5M, string1_oid)));
+  ASSERT_EQ(0, snmp_get(time_string_event_oid(".2.2.2", COUNT, PREV_5M, string1_oid)));
+  ASSERT_EQ(1, snmp_get(time_string_event_oid(".2.2.2", COUNT, PREV_5S, string1_oid)));
+
+  // Add another sample for the same string index.
+  tbl->accumulate(string1, 200);
+
+  // Check that there are the right number of entries in the table (3 time
+  // periods * 1 string index * 5 metrics)
+  entries = snmp_walk(".2.2.2");
+  ASSERT_EQ(15, entries.size());
+
+  ASSERT_EQ(2, snmp_get(time_string_event_oid(".2.2.2", COUNT, CURR_5M, string1_oid)));
+  ASSERT_EQ(150, snmp_get(time_string_event_oid(".2.2.2", MEAN, CURR_5M, string1_oid)));
+  ASSERT_EQ(2500, snmp_get(time_string_event_oid(".2.2.2", VAR, CURR_5M, string1_oid)));
+  ASSERT_EQ(100, snmp_get(time_string_event_oid(".2.2.2", LWM, CURR_5M, string1_oid)));
+  ASSERT_EQ(200, snmp_get(time_string_event_oid(".2.2.2", HWM, CURR_5M, string1_oid)));
+
+  ASSERT_EQ(0, snmp_get(time_string_event_oid(".2.2.2", COUNT, PREV_5M, string1_oid)));
+
+  ASSERT_EQ(1, snmp_get(time_string_event_oid(".2.2.2", COUNT, PREV_5S, string1_oid)));
+  ASSERT_EQ(100, snmp_get(time_string_event_oid(".2.2.2", MEAN, PREV_5S, string1_oid)));
+  ASSERT_EQ(0, snmp_get(time_string_event_oid(".2.2.2", VAR, PREV_5S, string1_oid)));
+  ASSERT_EQ(100, snmp_get(time_string_event_oid(".2.2.2", LWM, PREV_5S, string1_oid)));
+  ASSERT_EQ(100, snmp_get(time_string_event_oid(".2.2.2", HWM, PREV_5S, string1_oid)));
+
+  // Add a sample for a second string index.
+  tbl->accumulate(string2, 900);
+
+  // Check that there are the right number of entries in the table (3 time
+  // periods * 2 string indicies * 5 metrics)
+  entries = snmp_walk(".2.2.2");
+  ASSERT_EQ(30, entries.size());
+
+  // Check that the previous stats for the first string index are unchanged.
+  ASSERT_EQ(2, snmp_get(time_string_event_oid(".2.2.2", COUNT, CURR_5M, string1_oid)));
+  ASSERT_EQ(150, snmp_get(time_string_event_oid(".2.2.2", MEAN, CURR_5M, string1_oid)));
+  ASSERT_EQ(2500, snmp_get(time_string_event_oid(".2.2.2", VAR, CURR_5M, string1_oid)));
+  ASSERT_EQ(100, snmp_get(time_string_event_oid(".2.2.2", LWM, CURR_5M, string1_oid)));
+  ASSERT_EQ(200, snmp_get(time_string_event_oid(".2.2.2", HWM, CURR_5M, string1_oid)));
+
+  ASSERT_EQ(0, snmp_get(time_string_event_oid(".2.2.2", COUNT, PREV_5M, string1_oid)));
+
+  ASSERT_EQ(1, snmp_get(time_string_event_oid(".2.2.2", COUNT, PREV_5S, string1_oid)));
+  ASSERT_EQ(100, snmp_get(time_string_event_oid(".2.2.2", MEAN, PREV_5S, string1_oid)));
+  ASSERT_EQ(0, snmp_get(time_string_event_oid(".2.2.2", VAR, PREV_5S, string1_oid)));
+  ASSERT_EQ(100, snmp_get(time_string_event_oid(".2.2.2", LWM, PREV_5S, string1_oid)));
+  ASSERT_EQ(100, snmp_get(time_string_event_oid(".2.2.2", HWM, PREV_5S, string1_oid)));
+
+  // Check that there is one stat counted in the current 5m period for the new
+  // string index.
+  ASSERT_EQ(1, snmp_get(time_string_event_oid(".2.2.2", COUNT, CURR_5M, string2_oid)));
+  ASSERT_EQ(0, snmp_get(time_string_event_oid(".2.2.2", COUNT, PREV_5M, string2_oid)));
+  ASSERT_EQ(0, snmp_get(time_string_event_oid(".2.2.2", COUNT, PREV_5S, string2_oid)));
+
+  // Move on 10 minutes.  All the rows should still exist but everything should be zero again.
+  cwtest_advance_time_ms(1000*60*10);
+
+  entries = snmp_walk(".2.2.2");
+  ASSERT_EQ(30, entries.size());
+
+  for (int time_period : {1, 2, 3})
+  {
+    for (int stat : {3, 4, 5, 6, 7})
+    {
+      ASSERT_EQ(0, snmp_get(time_string_event_oid(".2.2.2", stat, time_period, string1_oid)));
+      ASSERT_EQ(0, snmp_get(time_string_event_oid(".2.2.2", stat, time_period, string2_oid)));
     }
   }
 
