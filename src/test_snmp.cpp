@@ -14,7 +14,6 @@
 #include "test_snmp.h"
 #include <string>
 
-
 TEST_F(SNMPTest, ScalarValue)
 {
   // Create a scalar
@@ -33,7 +32,7 @@ TEST_F(SNMPTest, TableOrdering)
   SNMP::EventAccumulatorTable* tbl = SNMP::EventAccumulatorTable::create("latency", test_oid);
 
   // Shell out to snmpwalk to find all entries in that table
-  std::vector<std::string> entries = snmp_walk(".1.2.2");
+  std::vector<std::string> entries = snmp_walk(test_oid);
 
   // Check that the table has the right number of entries (3 time periods * five
   // entries)
@@ -92,8 +91,7 @@ TEST_F(SNMPTest, LatencyScopeCalculations)
 {
   cwtest_completely_control_time(true);
 
-  // Create a table.  Use a different OID base because otherwise the indices
-  // clash with later tests.
+  // Create a table.
   SNMP::EventAccumulatorByScopeTable* tbl = SNMP::EventAccumulatorByScopeTable::create("latency", test_oid);
 
   // Just put one sample in (which should have a variance of 0).  This should
@@ -128,6 +126,8 @@ TEST_F(SNMPTest, LatencyScopeCalculations)
   ASSERT_EQ(300, snmp_get(".1.2.2.1.6.1.4.110.111.100.101"));
   // Count should be 2
   ASSERT_EQ(2, snmp_get(".1.2.2.1.7.1.4.110.111.100.101"));
+  // Count should be 10000
+  ASSERT_EQ(10000, snmp_get(".1.2.2.1.4.1.4.110.111.100.101"));
 
   // Move on 10 minutes.  Everything should be zero again.
   cwtest_advance_time_ms(1000*60*10);
@@ -164,7 +164,7 @@ TEST_F(SNMPTest, StringBasedEventStats)
 {
   cwtest_completely_control_time(true);
 
-  // Create a table.  Use a different OID base because otherwise the indices?// clash with later tests.
+  // Create a table.
   SNMP::TimeAndStringBasedEventTable* tbl = SNMP::TimeAndStringBasedEventTable::create("Latency", test_oid);
 
   // Just put one sample in (which should have a variance of 0).  This should
@@ -175,96 +175,94 @@ TEST_F(SNMPTest, StringBasedEventStats)
   std::string string2_oid = "16.115.101.114.118.101.114.50.46.100.99.49.46.122.111.110.101";
   tbl->accumulate(string1, 100);
 
-  //snmp_walk_debug(".1.2.2");
-
   // Check that there are the right number of entries in the table (3 time
   // periods * 1 string index * 5 metrics)
-  std::vector<std::string> entries = snmp_walk(".1.2.2");
+  std::vector<std::string> entries = snmp_walk(test_oid);
   ASSERT_EQ(15, entries.size());
 
   // Check that there is one stat counted in the current 5m time period and
   // nothing in the others.
-  ASSERT_EQ(1, snmp_get(time_string_event_oid(".1.2.2", COUNT, CURR_5M, string1_oid)));
-  ASSERT_EQ(0, snmp_get(time_string_event_oid(".1.2.2", COUNT, PREV_5M, string1_oid)));
-  ASSERT_EQ(0, snmp_get(time_string_event_oid(".1.2.2", COUNT, PREV_5S, string1_oid)));
+  ASSERT_EQ(1, snmp_get(time_string_event_oid(test_oid, COUNT, CURR_5M, string1_oid)));
+  ASSERT_EQ(0, snmp_get(time_string_event_oid(test_oid, COUNT, PREV_5M, string1_oid)));
+  ASSERT_EQ(0, snmp_get(time_string_event_oid(test_oid, COUNT, PREV_5S, string1_oid)));
 
   // Move on five seconds. The "previous five seconds" stat should now reflect that sample.
   cwtest_advance_time_ms(5000);
 
   // Check that there are the right number of entries in the table (3 time
   // periods * 1 string index * 5 metrics)
-  entries = snmp_walk(".1.2.2");
+  entries = snmp_walk(test_oid);
   ASSERT_EQ(15, entries.size());
 
   // Check that there is one stat counted in the current 5m and previous 5s
   // periods and nothing in the previous 5m.
-  ASSERT_EQ(1, snmp_get(time_string_event_oid(".1.2.2", COUNT, CURR_5M, string1_oid)));
-  ASSERT_EQ(0, snmp_get(time_string_event_oid(".1.2.2", COUNT, PREV_5M, string1_oid)));
-  ASSERT_EQ(1, snmp_get(time_string_event_oid(".1.2.2", COUNT, PREV_5S, string1_oid)));
+  ASSERT_EQ(1, snmp_get(time_string_event_oid(test_oid, COUNT, CURR_5M, string1_oid)));
+  ASSERT_EQ(0, snmp_get(time_string_event_oid(test_oid, COUNT, PREV_5M, string1_oid)));
+  ASSERT_EQ(1, snmp_get(time_string_event_oid(test_oid, COUNT, PREV_5S, string1_oid)));
 
   // Add another sample for the same string index.
   tbl->accumulate(string1, 200);
 
   // Check that there are the right number of entries in the table (3 time
   // periods * 1 string index * 5 metrics)
-  entries = snmp_walk(".1.2.2");
+  entries = snmp_walk(test_oid);
   ASSERT_EQ(15, entries.size());
 
-  ASSERT_EQ(2, snmp_get(time_string_event_oid(".1.2.2", COUNT, CURR_5M, string1_oid)));
-  ASSERT_EQ(150, snmp_get(time_string_event_oid(".1.2.2", MEAN, CURR_5M, string1_oid)));
-  ASSERT_EQ(2500, snmp_get(time_string_event_oid(".1.2.2", VAR, CURR_5M, string1_oid)));
-  ASSERT_EQ(100, snmp_get(time_string_event_oid(".1.2.2", LWM, CURR_5M, string1_oid)));
-  ASSERT_EQ(200, snmp_get(time_string_event_oid(".1.2.2", HWM, CURR_5M, string1_oid)));
+  ASSERT_EQ(2, snmp_get(time_string_event_oid(test_oid, COUNT, CURR_5M, string1_oid)));
+  ASSERT_EQ(150, snmp_get(time_string_event_oid(test_oid, MEAN, CURR_5M, string1_oid)));
+  ASSERT_EQ(2500, snmp_get(time_string_event_oid(test_oid, VAR, CURR_5M, string1_oid)));
+  ASSERT_EQ(100, snmp_get(time_string_event_oid(test_oid, LWM, CURR_5M, string1_oid)));
+  ASSERT_EQ(200, snmp_get(time_string_event_oid(test_oid, HWM, CURR_5M, string1_oid)));
 
-  ASSERT_EQ(0, snmp_get(time_string_event_oid(".1.2.2", COUNT, PREV_5M, string1_oid)));
+  ASSERT_EQ(0, snmp_get(time_string_event_oid(test_oid, COUNT, PREV_5M, string1_oid)));
 
-  ASSERT_EQ(1, snmp_get(time_string_event_oid(".1.2.2", COUNT, PREV_5S, string1_oid)));
-  ASSERT_EQ(100, snmp_get(time_string_event_oid(".1.2.2", MEAN, PREV_5S, string1_oid)));
-  ASSERT_EQ(0, snmp_get(time_string_event_oid(".1.2.2", VAR, PREV_5S, string1_oid)));
-  ASSERT_EQ(100, snmp_get(time_string_event_oid(".1.2.2", LWM, PREV_5S, string1_oid)));
-  ASSERT_EQ(100, snmp_get(time_string_event_oid(".1.2.2", HWM, PREV_5S, string1_oid)));
+  ASSERT_EQ(1, snmp_get(time_string_event_oid(test_oid, COUNT, PREV_5S, string1_oid)));
+  ASSERT_EQ(100, snmp_get(time_string_event_oid(test_oid, MEAN, PREV_5S, string1_oid)));
+  ASSERT_EQ(0, snmp_get(time_string_event_oid(test_oid, VAR, PREV_5S, string1_oid)));
+  ASSERT_EQ(100, snmp_get(time_string_event_oid(test_oid, LWM, PREV_5S, string1_oid)));
+  ASSERT_EQ(100, snmp_get(time_string_event_oid(test_oid, HWM, PREV_5S, string1_oid)));
 
   // Add a sample for a second string index.
   tbl->accumulate(string2, 900);
 
   // Check that there are the right number of entries in the table (3 time
   // periods * 2 string indicies * 5 metrics)
-  entries = snmp_walk(".1.2.2");
+  entries = snmp_walk(test_oid);
   ASSERT_EQ(30, entries.size());
 
   // Check that the previous stats for the first string index are unchanged.
-  ASSERT_EQ(2, snmp_get(time_string_event_oid(".1.2.2", COUNT, CURR_5M, string1_oid)));
-  ASSERT_EQ(150, snmp_get(time_string_event_oid(".1.2.2", MEAN, CURR_5M, string1_oid)));
-  ASSERT_EQ(2500, snmp_get(time_string_event_oid(".1.2.2", VAR, CURR_5M, string1_oid)));
-  ASSERT_EQ(100, snmp_get(time_string_event_oid(".1.2.2", LWM, CURR_5M, string1_oid)));
-  ASSERT_EQ(200, snmp_get(time_string_event_oid(".1.2.2", HWM, CURR_5M, string1_oid)));
+  ASSERT_EQ(2, snmp_get(time_string_event_oid(test_oid, COUNT, CURR_5M, string1_oid)));
+  ASSERT_EQ(150, snmp_get(time_string_event_oid(test_oid, MEAN, CURR_5M, string1_oid)));
+  ASSERT_EQ(2500, snmp_get(time_string_event_oid(test_oid, VAR, CURR_5M, string1_oid)));
+  ASSERT_EQ(100, snmp_get(time_string_event_oid(test_oid, LWM, CURR_5M, string1_oid)));
+  ASSERT_EQ(200, snmp_get(time_string_event_oid(test_oid, HWM, CURR_5M, string1_oid)));
 
-  ASSERT_EQ(0, snmp_get(time_string_event_oid(".1.2.2", COUNT, PREV_5M, string1_oid)));
+  ASSERT_EQ(0, snmp_get(time_string_event_oid(test_oid, COUNT, PREV_5M, string1_oid)));
 
-  ASSERT_EQ(1, snmp_get(time_string_event_oid(".1.2.2", COUNT, PREV_5S, string1_oid)));
-  ASSERT_EQ(100, snmp_get(time_string_event_oid(".1.2.2", MEAN, PREV_5S, string1_oid)));
-  ASSERT_EQ(0, snmp_get(time_string_event_oid(".1.2.2", VAR, PREV_5S, string1_oid)));
-  ASSERT_EQ(100, snmp_get(time_string_event_oid(".1.2.2", LWM, PREV_5S, string1_oid)));
-  ASSERT_EQ(100, snmp_get(time_string_event_oid(".1.2.2", HWM, PREV_5S, string1_oid)));
+  ASSERT_EQ(1, snmp_get(time_string_event_oid(test_oid, COUNT, PREV_5S, string1_oid)));
+  ASSERT_EQ(100, snmp_get(time_string_event_oid(test_oid, MEAN, PREV_5S, string1_oid)));
+  ASSERT_EQ(0, snmp_get(time_string_event_oid(test_oid, VAR, PREV_5S, string1_oid)));
+  ASSERT_EQ(100, snmp_get(time_string_event_oid(test_oid, LWM, PREV_5S, string1_oid)));
+  ASSERT_EQ(100, snmp_get(time_string_event_oid(test_oid, HWM, PREV_5S, string1_oid)));
 
   // Check that there is one stat counted in the current 5m period for the new
   // string index.
-  ASSERT_EQ(1, snmp_get(time_string_event_oid(".1.2.2", COUNT, CURR_5M, string2_oid)));
-  ASSERT_EQ(0, snmp_get(time_string_event_oid(".1.2.2", COUNT, PREV_5M, string2_oid)));
-  ASSERT_EQ(0, snmp_get(time_string_event_oid(".1.2.2", COUNT, PREV_5S, string2_oid)));
+  ASSERT_EQ(1, snmp_get(time_string_event_oid(test_oid, COUNT, CURR_5M, string2_oid)));
+  ASSERT_EQ(0, snmp_get(time_string_event_oid(test_oid, COUNT, PREV_5M, string2_oid)));
+  ASSERT_EQ(0, snmp_get(time_string_event_oid(test_oid, COUNT, PREV_5S, string2_oid)));
 
   // Move on 10 minutes.  All the rows should still exist but everything should be zero again.
   cwtest_advance_time_ms(1000*60*10);
 
-  entries = snmp_walk(".1.2.2");
+  entries = snmp_walk(test_oid);
   ASSERT_EQ(30, entries.size());
 
   for (int time_period : {1, 2, 3})
   {
     for (int stat : {3, 4, 5, 6, 7})
     {
-      ASSERT_EQ(0, snmp_get(time_string_event_oid(".1.2.2", stat, time_period, string1_oid)));
-      ASSERT_EQ(0, snmp_get(time_string_event_oid(".1.2.2", stat, time_period, string2_oid)));
+      ASSERT_EQ(0, snmp_get(time_string_event_oid(test_oid, stat, time_period, string1_oid)));
+      ASSERT_EQ(0, snmp_get(time_string_event_oid(test_oid, stat, time_period, string2_oid)));
     }
   }
 
@@ -331,7 +329,7 @@ TEST_F(SNMPTest, IPCountTable)
   tbl->get("127.0.0.1")->increment();
 
   // Shell out to snmpwalk to find all entries in that table
-  std::vector<std::string> entries = snmp_walk(".1.2.2");
+  std::vector<std::string> entries = snmp_walk(test_oid);
 
   ASSERT_EQ(1, entries.size());
   ASSERT_EQ(".1.2.2.1.3.1.4.127.0.0.1 = 1", entries[0]);
@@ -600,7 +598,7 @@ TEST_F(SNMPTest, CxCounterTable)
 
   // Check that the rows that are there are the ones we expect and that initial
   // values are zero.
-  std::vector<std::string> entries = snmp_walk(".1.2.2");
+  std::vector<std::string> entries = snmp_walk(test_oid);
 
   // Check that there are the right number of entries in the table (3 time
   // periods * (33 base result-codes plus 14 3GPP result-codes plus 1 timeout)
@@ -652,7 +650,7 @@ TEST_F(SNMPTest, IPTimeBasedCounterTableSingleIPZeroCount)
   cwtest_advance_time_ms(5000);
 
   // All counts should be zero.
-  std::vector<std::string> entries = snmp_walk(".1.2.2");
+  std::vector<std::string> entries = snmp_walk(test_oid);
 
   EXPECT_EQ(entries.size(), 3);
   EXPECT_EQ(".1.2.2.1.4.1.4.192.168.0.1.1 = 0", entries[0]);
@@ -685,7 +683,7 @@ TEST_F(SNMPTest, IPTimeBasedCounterTableRefcountIP)
   cwtest_advance_time_ms(5000);
 
   // Check that the rows that are there are the ones we expect.
-  std::vector<std::string> entries = snmp_walk(".1.2.2");
+  std::vector<std::string> entries = snmp_walk(test_oid);
 
   EXPECT_EQ(entries.size(), 3);
   EXPECT_EQ(".1.2.2.1.4.1.4.192.168.0.1.1 = 2", entries[0]);
@@ -718,7 +716,7 @@ TEST_F(SNMPTest, IPTimeBasedCounterTableRefcountDeleteIP)
   cwtest_advance_time_ms(5000);
 
   // Check that the rows for the IP have been removed.
-  std::vector<std::string> entries = snmp_walk(".1.2.2");
+  std::vector<std::string> entries = snmp_walk(test_oid);
 
   EXPECT_EQ(entries.size(), 0);
 
@@ -743,7 +741,7 @@ TEST_F(SNMPTest, IPTimeBasedCounterTableSingleIP)
   cwtest_advance_time_ms(5000);
 
   // Check that the rows that are there are the ones we expect.
-  std::vector<std::string> entries = snmp_walk(".1.2.2");
+  std::vector<std::string> entries = snmp_walk(test_oid);
 
   EXPECT_EQ(entries.size(), 3);
   EXPECT_EQ(".1.2.2.1.4.1.4.192.168.0.1.1 = 2", entries[0]);
@@ -779,7 +777,7 @@ TEST_F(SNMPTest, IPTimeBasedCounterTableMultipleIPs)
   cwtest_advance_time_ms(5000);
 
   // Check that the rows that are there are the ones we expect.
-  std::vector<std::string> entries = snmp_walk(".1.2.2");
+  std::vector<std::string> entries = snmp_walk(test_oid);
 
   EXPECT_EQ(entries.size(), 9);
   EXPECT_EQ(".1.2.2.1.4.1.4.192.168.0.1.1 = 1", entries[0]);
@@ -816,7 +814,7 @@ TEST_F(SNMPTest, IPTimeBasedCounterTableRemoveIP)
   cwtest_advance_time_ms(5000);
 
   // Check that the rows that are there are the ones we expect.
-  std::vector<std::string> entries = snmp_walk(".1.2.2");
+  std::vector<std::string> entries = snmp_walk(test_oid);
 
   EXPECT_EQ(entries.size(), 6);
   EXPECT_EQ(".1.2.2.1.4.1.4.192.168.0.1.1 = 1", entries[0]);
@@ -829,7 +827,7 @@ TEST_F(SNMPTest, IPTimeBasedCounterTableRemoveIP)
   // Delete a row and check it disappears from the table.
   tbl->remove_ip("192.168.0.1");
 
-  entries = snmp_walk(".1.2.2");
+  entries = snmp_walk(test_oid);
   EXPECT_EQ(entries.size(), 3);
   EXPECT_EQ(".1.2.2.1.4.1.4.192.168.0.2.1 = 2", entries[0]);
   EXPECT_EQ(".1.2.2.1.4.1.4.192.168.0.2.2 = 2", entries[1]);
@@ -852,7 +850,7 @@ TEST_F(SNMPTest, IPTimeBasedCounterTableAddCountsAgeOut)
   tbl->increment("192.168.0.1");
 
   // Initially the count should only be non-zero in the current 5min row.
-  std::vector<std::string> entries = snmp_walk(".1.2.2");
+  std::vector<std::string> entries = snmp_walk(test_oid);
 
   EXPECT_EQ(entries.size(), 3);
   EXPECT_EQ(".1.2.2.1.4.1.4.192.168.0.1.1 = 0", entries[0]);
@@ -861,20 +859,20 @@ TEST_F(SNMPTest, IPTimeBasedCounterTableAddCountsAgeOut)
 
   // After 5s the count appears in the previous 5s row.
   cwtest_advance_time_ms(5000);
-  entries = snmp_walk(".1.2.2");
+  entries = snmp_walk(test_oid);
   EXPECT_EQ(entries.size(), 3);
   EXPECT_EQ(".1.2.2.1.4.1.4.192.168.0.1.1 = 1", entries[0]);
 
   // After another 5s the count disappears in the previous 5s row.
   cwtest_advance_time_ms(5000);
-  entries = snmp_walk(".1.2.2");
+  entries = snmp_walk(test_oid);
   EXPECT_EQ(entries.size(), 3);
   EXPECT_EQ(".1.2.2.1.4.1.4.192.168.0.1.1 = 0", entries[0]);
 
   // After another 4m50s the count moves from the current 5min row to the
   // previous 5min row.
   cwtest_advance_time_ms(5 * 60 * 1000 - 5000);
-  entries = snmp_walk(".1.2.2");
+  entries = snmp_walk(test_oid);
   EXPECT_EQ(entries.size(), 3);
   EXPECT_EQ(".1.2.2.1.4.1.4.192.168.0.1.1 = 0", entries[0]);
   EXPECT_EQ(".1.2.2.1.4.1.4.192.168.0.1.2 = 0", entries[1]);
@@ -882,7 +880,7 @@ TEST_F(SNMPTest, IPTimeBasedCounterTableAddCountsAgeOut)
 
   // After another 5 mins the counts have disappeared entirely. .
   cwtest_advance_time_ms(5 * 60 * 1000);
-  entries = snmp_walk(".1.2.2");
+  entries = snmp_walk(test_oid);
   EXPECT_EQ(entries.size(), 3);
   EXPECT_EQ(".1.2.2.1.4.1.4.192.168.0.1.1 = 0", entries[0]);
   EXPECT_EQ(".1.2.2.1.4.1.4.192.168.0.1.2 = 0", entries[1]);
