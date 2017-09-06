@@ -47,11 +47,11 @@ TARGET_SOURCES_TEST := memcachedstore.cpp \
                        test_dns.cpp \
                        test_snmp.cpp \
                        processinstance.cpp \
+                       test_interposer.cpp \
                        test_memcachedsolution.cpp
 
 TARGET_EXTRA_OBJS_TEST := gmock-all.o \
-                          gtest-all.o \
-                          test_interposer.so
+                          gtest-all.o
 
 TEST_XML = $(TEST_OUT_DIR)/test_detail_$(TARGET_TEST).xml
 VG_XML = $(TEST_OUT_DIR)/vg_$(TARGET_TEST).memcheck
@@ -96,6 +96,7 @@ LDFLAGS += -lmemcached \
            -lpthread \
            -lc \
            -lstdc++ \
+           -ldl \
            -lrt \
            -lcares \
            -lboost_regex \
@@ -214,7 +215,3 @@ $(OBJ_DIR_TEST)/gtest-all.o : $(GTEST_SRCS_)
 $(OBJ_DIR_TEST)/gmock-all.o : $(GMOCK_SRCS_)
 	$(CXX) $(CPPFLAGS) -I$(GTEST_DIR) -I$(GTEST_DIR)/include -I$(GMOCK_DIR) -I$(GMOCK_DIR)/include \
             -c $(GMOCK_DIR)/src/gmock-all.cc -o $@
-
-# Build rule for our interposer.
-$(OBJ_DIR_TEST)/test_interposer.so: ${ROOT}/modules/cpp-common/test_utils/test_interposer.cpp ${ROOT}/modules/cpp-common/test_utils/test_interposer.hpp
-	$(CXX) $(CPPFLAGS) -shared -fPIC -ldl -Wl,--whole-archive -Wl,--no-as-needed -lrt -Wl,--no-whole-archive -Wl,--as-needed $< -o $@
