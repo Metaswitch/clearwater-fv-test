@@ -44,10 +44,10 @@ public:
   virtual bool execute_process();
 };
 
-class AstaireInstance : public ProcessInstance
+class RogersInstance : public ProcessInstance
 {
 public:
-  AstaireInstance(const std::string& ip, int port) : ProcessInstance(ip, port) {};
+  RogersInstance(const std::string& ip, int port) : ProcessInstance(ip, port) {};
   virtual bool execute_process();
 };
 

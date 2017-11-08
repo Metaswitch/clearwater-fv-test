@@ -23,7 +23,7 @@
 
 static const SAS::TrailId DUMMY_TRAIL_ID = 0x12345678;
 static const int BASE_MEMCACHED_PORT = 33333;
-static const int ASTAIRE_PORT = 11311;
+static const int ROGERS_PORT = 11311;
 
 void signal_handler(int signal);
 
@@ -32,10 +32,10 @@ void signal_handler(int signal);
 // This fixture:
 // - Creates a unique key and an instance of TopologyNeutralMemcachedStore for
 //   each test.
-// - Tidies up instances of memcached and Astaire and any config files between
+// - Tidies up instances of memcached and Rogers and any config files between
 //   sets of tests.
 // - Provides helper methods for memcached operations and managing instances of
-//   memcached and Astaire
+//   memcached and Rogers
 class BaseMemcachedSolutionTest : public ::testing::Test
 {
 public:
@@ -48,7 +48,7 @@ public:
     _next_key = std::rand();
   }
 
-  /// Clear all the memcached and Astaire instances. This calls their
+  /// Clear all the memcached and Rogers instances. This calls their
   /// destructors which will kill the underlying processes. Also remove the
   /// cluster_settings file.
   static void TearDownTestCase()
@@ -56,7 +56,7 @@ public:
     signal(SIGSEGV, SIG_DFL);
 
     _memcached_instances.clear();
-    _astaire_instances.clear();
+    _rogers_instances.clear();
     _dnsmasq_instance.reset();
 
     if (remove("cluster_settings") != 0)
@@ -66,14 +66,14 @@ public:
   }
 
   /// Create a new store and a new unique key for this test. Also make sure that
-  /// all of the memcached and Astaire instances are running before starting the
+  /// all of the memcached and Rogers instances are running before starting the
   /// new test. Any killed instances should be restarted at the end of the
   /// previous test, and the new test will assume this.
   virtual void SetUp()
   {
     _dns_client = new DnsCachedResolver("127.0.0.1", 5353);
     _resolver = new AstaireResolver(_dns_client, AF_INET);
-    _store = new TopologyNeutralMemcachedStore("astaire.local", _resolver, true);
+    _store = new TopologyNeutralMemcachedStore("rogers.local", _resolver, true);
 
     // Create a new key for every test (to prevent tests from interacting with
     // each other).
@@ -129,50 +129,46 @@ public:
     cluster_settings.close();
   }
 
-  /// Creates and starts up the specified number of Astaire instances. We
-  /// currently only support one Astaire instance (since the port Astaire
+  /// Creates and starts up the specified number of ogers instances. We
+  /// currently only support one Rogers instance (since the port Rogers
   /// listens on is not currently configurable).
-  static void create_and_start_astaire_instances(int astaire_instances)
+  static void create_and_start_rogers_instances(int rogers_instances)
   {
-    for (int ii = 0; ii < astaire_instances; ++ii)
+    for (int ii = 0; ii < rogers_instances; ++ii)
     {
       std::string ip = "127.0.0." + std::to_string(ii + 1);
-      _astaire_instances.emplace_back(new AstaireInstance(ip, ASTAIRE_PORT));
-      _astaire_instances.back()->start_instance();
+      _rogers_instances.emplace_back(new RogersInstance(ip, ROGERS_PORT));
+      _rogers_instances.back()->start_instance();
     }
   }
 
   /// Creates and starts up a dnsmasq instance to allow the store to find
-  /// Astaire instances.
-  static void create_and_start_dns_for_astaire(
-    const std::vector<std::shared_ptr<AstaireInstance>>& astaires)
+  /// Rogers instances.
+  static void create_and_start_dns_for_rogers(
+    const std::vector<std::shared_ptr<RogersInstance>>& rogers)
   {
     std::vector<std::string> hosts;
 
-    for(std::vector<std::shared_ptr<AstaireInstance>>::const_iterator instance = astaires.begin();
-        instance != astaires.end();
-        ++instance)
+    for(const std::shared_ptr<RogersInstance>& instance : rogers)
     {
-      hosts.push_back((*instance)->ip());
+      hosts.push_back(instance->ip());
     }
 
     _dnsmasq_instance = std::shared_ptr<DnsmasqInstance>(
-      new DnsmasqInstance("127.0.0.1", 5353, {{"astaire.local", hosts}}));
+      new DnsmasqInstance("127.0.0.1", 5353, {{"rogers.local", hosts}}));
     _dnsmasq_instance->start_instance();
   }
 
-  /// Wait for all existing memcached and Astaire instances to come up by
+  /// Wait for all existing memcached and Rogers instances to come up by
   /// checking they're listening on the correct ports. Returns false if any of
   /// the instances fail to come up.
   static bool wait_for_instances()
   {
     bool success = true;
 
-    for (std::vector<std::shared_ptr<MemcachedInstance>>::iterator inst = _memcached_instances.begin();
-         inst != _memcached_instances.end();
-         ++inst)
+    for (const std::shared_ptr<MemcachedInstance>& inst : _memcached_instances)
     {
-      success = (*inst)->wait_for_instance();
+      success = inst->wait_for_instance();
 
       if (!success)
       {
@@ -180,11 +176,9 @@ public:
       }
     }
 
-    for (std::vector<std::shared_ptr<AstaireInstance>>::iterator inst = _astaire_instances.begin();
-         inst != _astaire_instances.end();
-         ++inst)
+    for (const std::shared_ptr<RogersInstance>& inst : _rogers_instances)
     {
-      success = (*inst)->wait_for_instance();
+      success = inst->wait_for_instance();
 
       if (!success)
       {
@@ -254,7 +248,7 @@ public:
   /// Use shared pointers for managing the instances so that the memory gets
   /// freed when the vector is cleared.
   static std::vector<std::shared_ptr<MemcachedInstance>> _memcached_instances;
-  static std::vector<std::shared_ptr<AstaireInstance>> _astaire_instances;
+  static std::vector<std::shared_ptr<RogersInstance>> _rogers_instances;
   static std::shared_ptr<DnsmasqInstance> _dnsmasq_instance;
 
   /// Tests that use this fixture use a monotonically incrementing numerical key
@@ -268,13 +262,13 @@ public:
 };
 
 std::vector<std::shared_ptr<MemcachedInstance>> BaseMemcachedSolutionTest::_memcached_instances;
-std::vector<std::shared_ptr<AstaireInstance>> BaseMemcachedSolutionTest::_astaire_instances;
+std::vector<std::shared_ptr<RogersInstance>> BaseMemcachedSolutionTest::_rogers_instances;
 std::shared_ptr<DnsmasqInstance> BaseMemcachedSolutionTest::_dnsmasq_instance;
 
 unsigned int BaseMemcachedSolutionTest::_next_key;
 const std::string BaseMemcachedSolutionTest::_table = "test_table";
 
-/// Clear all the memcached and Astaire instances. This calls their
+/// Clear all the memcached and Rogers instances. This calls their
 /// destructors which will kill the underlying processes. Also remove the
 /// cluster_settings file.
 void signal_handler(int sig)
@@ -282,7 +276,7 @@ void signal_handler(int sig)
   signal(SIGSEGV, SIG_DFL);
 
   BaseMemcachedSolutionTest::_memcached_instances.clear();
-  BaseMemcachedSolutionTest::_astaire_instances.clear();
+  BaseMemcachedSolutionTest::_rogers_instances.clear();
   BaseMemcachedSolutionTest::_dnsmasq_instance.reset();
 
   if (remove("cluster_settings") != 0)
@@ -299,8 +293,8 @@ class ParameterizedMemcachedSolutionTest : public BaseMemcachedSolutionTest
   static void SetUpTestCase()
   {
     create_and_start_memcached_instances(T::num_memcached_instances());
-    create_and_start_astaire_instances(T::num_astaire_instances());
-    create_and_start_dns_for_astaire(_astaire_instances);
+    create_and_start_rogers_instances(T::num_rogers_instances());
+    create_and_start_dns_for_rogers(_rogers_instances);
 
     BaseMemcachedSolutionTest::SetUpTestCase();
   }
@@ -312,7 +306,7 @@ class ParameterizedMemcachedSolutionTest : public BaseMemcachedSolutionTest
 class NoFailuresScenario
 {
   static int num_memcached_instances() { return 2; }
-  static int num_astaire_instances() { return 2; }
+  static int num_rogers_instances() { return 2; }
   static void trigger_failure(BaseMemcachedSolutionTest* fixture) {}
   static void fix_failure(BaseMemcachedSolutionTest* fixture) {}
 };
@@ -321,7 +315,7 @@ class NoFailuresScenario
 class MemcachedFailsScenario
 {
   static int num_memcached_instances() { return 2; }
-  static int num_astaire_instances() { return 2; }
+  static int num_rogers_instances() { return 2; }
 
   static void trigger_failure(BaseMemcachedSolutionTest* fixture)
   {
@@ -339,7 +333,7 @@ class MemcachedFailsScenario
 class MemcachedRestartsScenario
 {
   static int num_memcached_instances() { return 2; }
-  static int num_astaire_instances() { return 2; }
+  static int num_rogers_instances() { return 2; }
 
   static void trigger_failure(BaseMemcachedSolutionTest* fixture)
   {
@@ -352,34 +346,34 @@ class MemcachedRestartsScenario
   }
 };
 
-/// Scenario in which a Astaire instance fails and does not restart.
-class AstaireFailsScenario
+/// Scenario in which a Rogers instance fails and does not restart.
+class RogersFailsScenario
 {
   static int num_memcached_instances() { return 2; }
-  static int num_astaire_instances() { return 2; }
+  static int num_rogers_instances() { return 2; }
 
   static void trigger_failure(BaseMemcachedSolutionTest* fixture)
   {
-    EXPECT_TRUE(fixture->_astaire_instances.back()->kill_instance());
+    EXPECT_TRUE(fixture->_rogers_instances.back()->kill_instance());
   }
 
   static void fix_failure(BaseMemcachedSolutionTest* fixture)
   {
-    EXPECT_TRUE(fixture->_astaire_instances.back()->start_instance());
-    EXPECT_TRUE(fixture->_astaire_instances.back()->wait_for_instance());
+    EXPECT_TRUE(fixture->_rogers_instances.back()->start_instance());
+    EXPECT_TRUE(fixture->_rogers_instances.back()->wait_for_instance());
   }
 };
 
-/// Scenario in which a Astaire instance fails and does not restart.
-class AstaireRestartsScenario
+/// Scenario in which a Rogers instance fails and does not restart.
+class RogersRestartsScenario
 {
   static int num_memcached_instances() { return 2; }
-  static int num_astaire_instances() { return 2; }
+  static int num_rogers_instances() { return 2; }
 
   static void trigger_failure(BaseMemcachedSolutionTest* fixture)
   {
-    EXPECT_TRUE(fixture->_astaire_instances.back()->restart_instance());
-    EXPECT_TRUE(fixture->_astaire_instances.back()->wait_for_instance());
+    EXPECT_TRUE(fixture->_rogers_instances.back()->restart_instance());
+    EXPECT_TRUE(fixture->_rogers_instances.back()->wait_for_instance());
   }
 
   static void fix_failure(BaseMemcachedSolutionTest* fixture)
@@ -393,14 +387,14 @@ class AstaireRestartsScenario
 ///
 ////////////////////////////////////////////////////////////////////////////////
 
-/// Test fixture that sets up 2 Astaires and 2 memcacheds.
+/// Test fixture that sets up 2 Rogerss and 2 memcacheds.
 class SimpleMemcachedSolutionTest : public BaseMemcachedSolutionTest
 {
   static void SetUpTestCase()
   {
     create_and_start_memcached_instances(2);
-    create_and_start_astaire_instances(2);
-    create_and_start_dns_for_astaire(_astaire_instances);
+    create_and_start_rogers_instances(2);
+    create_and_start_dns_for_rogers(_rogers_instances);
 
     BaseMemcachedSolutionTest::SetUpTestCase();
   }
@@ -708,7 +702,7 @@ TEST_F(SimpleMemcachedSolutionTest, BadDomainName)
 TEST_F(SimpleMemcachedSolutionTest, DomainAndPort)
 {
   delete _store; _store = NULL;
-  _store = new TopologyNeutralMemcachedStore("astaire.local:11311", _resolver, true);
+  _store = new TopologyNeutralMemcachedStore("rogers.local:11311", _resolver, true);
 
   uint64_t cas = 0;
   Store::Status rc;
@@ -743,11 +737,11 @@ TEST_F(SimpleMemcachedSolutionTest, DomainAndPort)
 ///
 ////////////////////////////////////////////////////////////////////////////////
 
-/// An additional scenario in which a single Astaire instance is created, which
+/// An additional scenario in which a single Rogers instance is created, which
 /// can be restarted.
-class LoneAstaireRestartsScenario : public AstaireRestartsScenario
+class LoneRogersRestartsScenario : public RogersRestartsScenario
 {
-  static int num_astaire_instances() { return 1; }
+  static int num_rogers_instances() { return 1; }
 };
 
 /// Define a new test fixture as a simple subclass of the parameterized test.
@@ -759,9 +753,9 @@ class MemcachedSolutionFailureTest : public ParameterizedMemcachedSolutionTest<T
 typedef ::testing::Types<
   MemcachedFailsScenario,
   MemcachedRestartsScenario,
-  AstaireFailsScenario,
-  AstaireRestartsScenario,
-  LoneAstaireRestartsScenario
+  RogersFailsScenario,
+  RogersRestartsScenario,
+  LoneRogersRestartsScenario
 > FailureScenarios;
 
 TYPED_TEST_CASE(MemcachedSolutionFailureTest, FailureScenarios);
@@ -896,7 +890,7 @@ TYPED_TEST(MemcachedSolutionFailureTest, AddKillSetSetDataContentionSet)
     // when it is destroyed, all of the iterations take place in the same
     // fixture.
     delete this->_store; this->_store = NULL;
-    this->_store = new TopologyNeutralMemcachedStore("astaire.local",
+    this->_store = new TopologyNeutralMemcachedStore("rogers.local",
                                                      this->_resolver,
                                                      true);
   }
@@ -984,14 +978,14 @@ class LargerClustersMemcachedSolutionTest : public ParameterizedMemcachedSolutio
 class LargeClusterMemcachedFails : public MemcachedFailsScenario
 {
   static int num_memcached_instances() { return 3; }
-  static int num_astaire_instances() { return 3; }
+  static int num_rogers_instances() { return 3; }
 };
 
 /// Scenario in which a memcached instance fails and does not restart.
 class LargeClusterMemcachedRestarts : public MemcachedRestartsScenario
 {
   static int num_memcached_instances() { return 3; }
-  static int num_astaire_instances() { return 3; }
+  static int num_rogers_instances() { return 3; }
 };
 
 typedef ::testing::Types<
@@ -1086,8 +1080,8 @@ const static int NUM_INCR_PER_KEY_PER_THREAD = 10;
 typedef ::testing::Types<
   // MemcachedFailsScenario,
   // MemcachedRestartsScenario,
-  // AstaireFailsScenario,
-  // AstaireRestartsScenario,
+  // RogersFailsScenario,
+  // RogersRestartsScenario,
   NoFailuresScenario
 > ThrashTestScenarios;
 
