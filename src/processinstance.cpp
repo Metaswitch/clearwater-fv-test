@@ -138,9 +138,9 @@ bool MemcachedInstance::execute_process()
   return false;
 }
 
-bool AstaireInstance::execute_process()
+std::string get_log_level()
 {
-  // Run Astaire at the same log level as the tests by parsing the NOISY=t:?
+  // Work out the log level of the tests by parsing the NOISY=t:?
   // environment variable.
   int log_level = 0;
   char* val = getenv("NOISY");
@@ -157,18 +157,21 @@ bool AstaireInstance::execute_process()
     }
   }
 
-  // Start Astaire. execlp only returns if an error has occurred, in which case
+  return std::to_string(log_level);
+}
+
+bool RogersInstance::execute_process()
+{
+  // Start Rogers. execlp only returns if an error has occurred, in which case
   // return false. This assumes that cluster_settings has been setup.
-  execlp("../modules/astaire/build/bin/astaire",
-         "astaire",
-         "--local-name",
-         "127.0.0.1",
+  execlp("../modules/astaire/build/bin/rogers",
+         "rogers",
          "--bind-addr",
          _ip.c_str(),
          "--cluster-settings-file",
          "./cluster_settings",
          "--log-level",
-         std::to_string(log_level).c_str(),
+         get_log_level().c_str(),
          (char*)NULL);
   perror("execlp");
   return false;
