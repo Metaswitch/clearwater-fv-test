@@ -129,7 +129,7 @@ public:
     cluster_settings.close();
   }
 
-  /// Creates and starts up the specified number of ogers instances. We
+  /// Creates and starts up the specified number of Rogers instances. We
   /// currently only support one Rogers instance (since the port Rogers
   /// listens on is not currently configurable).
   static void create_and_start_rogers_instances(int rogers_instances)
