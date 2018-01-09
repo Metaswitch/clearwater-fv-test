@@ -11,6 +11,7 @@
 #error "netsnmp includes have polluted the namespace!"
 #endif
 
+#include "snmp_ip_count_table.h"
 #include "test_snmp.h"
 #include <string>
 
@@ -888,4 +889,42 @@ TEST_F(SNMPTest, IPTimeBasedCounterTableAddCountsAgeOut)
 
   cwtest_reset_time();
   delete tbl;
+}
+
+unsigned long ONE_HUNDRED_THOUSAND = 100*1000;
+
+void* get_many_rows(void* table_void)
+{
+  SNMP::IPCountTable* t = (SNMP::IPCountTable*)table_void;
+  for (unsigned long ii = 0; ii < ONE_HUNDRED_THOUSAND; ii++)
+  {
+    SNMP::IPCountRow* r = t->get("10.0.0.1");
+    r->increment();
+    r->decrement();
+  }
+  return NULL;
+}
+
+void* delete_row_repeatedly(void* table_void)
+{
+  SNMP::IPCountTable* t = (SNMP::IPCountTable*)table_void;
+  for (unsigned long ii = 0; ii < ONE_HUNDRED_THOUSAND; ii++)
+  {
+    t->remove("10.0.0.1");
+  }
+  return NULL;
+}
+
+// This test checks that the IPCountTable is thread-safe, by creating two threads that manipulate it.
+// It doesn't assert anything - a failure here will cause a C++ exception or a crash.
+TEST_F(SNMPTest, IPCountThreading)
+{
+  SNMP::IPCountTable* t = SNMP::IPCountTable::create("test", ".1.2.3.4");
+  pthread_t remove_thread;
+  pthread_t get_thread;
+  pthread_create(&remove_thread, NULL, delete_row_repeatedly, t);
+  pthread_create(&get_thread, NULL, get_many_rows, t);
+  pthread_join(get_thread, NULL);
+  pthread_join(remove_thread, NULL);
+  delete t;
 }
