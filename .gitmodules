@@ -10,3 +10,6 @@
 [submodule "modules/rapidjson"]
 	path = modules/rapidjson
 	url = git@github.com:miloyip/rapidjson.git
+[submodule "modules/chronos"]
+	path = modules/chronos
+	url = git@github.com:Metaswitch/chronos.git

@@ -12,7 +12,7 @@ MODULE_DIR := ${ROOT}/modules
 INCLUDE_DIR := ${INSTALL_DIR}/include
 LIB_DIR := ${INSTALL_DIR}/lib
 
-SUBMODULES := astaire
+SUBMODULES := astaire chronos
 
 include $(patsubst %, ${MK_DIR}/%.mk, ${SUBMODULES})
 include ${MK_DIR}/fvtest.mk
