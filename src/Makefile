@@ -49,7 +49,8 @@ TARGET_SOURCES_TEST := memcachedstore.cpp \
                        test_snmp.cpp \
                        processinstance.cpp \
                        test_interposer.cpp \
-                       test_memcachedsolution.cpp
+                       test_memcachedsolution.cpp \
+                       test_s4solution.cpp
 
 TARGET_EXTRA_OBJS_TEST := gmock-all.o \
                           gtest-all.o
@@ -101,6 +102,8 @@ LDFLAGS += -lmemcached \
            -lrt \
            -lcares \
            -lboost_regex \
+           -lboost_filesystem \
+           -lboost_system \
            $(shell net-snmp-config --netsnmp-agent-libs)
 
 

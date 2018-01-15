@@ -25,8 +25,6 @@ static const SAS::TrailId DUMMY_TRAIL_ID = 0x12345678;
 static const int BASE_MEMCACHED_PORT = 33333;
 static const int ROGERS_PORT = 11311;
 
-void signal_handler(int signal);
-
 // Fixture for all memcached solution tests.
 //
 // This fixture:
@@ -39,6 +37,8 @@ void signal_handler(int signal);
 class BaseMemcachedSolutionTest : public ::testing::Test
 {
 public:
+  static void signal_handler(int signal);
+
   /// Register the signal handler to tidy up if we crash and set _key to a
   /// random number.
   static void SetUpTestCase()
@@ -271,7 +271,7 @@ const std::string BaseMemcachedSolutionTest::_table = "test_table";
 /// Clear all the memcached and Rogers instances. This calls their
 /// destructors which will kill the underlying processes. Also remove the
 /// cluster_settings file.
-void signal_handler(int sig)
+void BaseMemcachedSolutionTest::signal_handler(int sig)
 {
   signal(SIGSEGV, SIG_DFL);
 

@@ -63,3 +63,17 @@ private:
   void write_config(std::map<std::string, std::vector<std::string>> a_records);
   std::string _cfgfile;
 };
+
+class ChronosInstance : public ProcessInstance
+{
+public:
+  ChronosInstance(const std::string& ip, int port, const std::string& instance_dir);
+  virtual ~ChronosInstance();
+  bool execute_process();
+
+private:
+  std::string _instance_dir;
+  std::string _log_dir;
+  std::string _conf_dir;
+  std::string _conf_file;
+};

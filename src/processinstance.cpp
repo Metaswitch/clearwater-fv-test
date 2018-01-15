@@ -21,6 +21,7 @@
 #include <netdb.h>
 #include <cstring>
 #include <fstream>
+#include <boost/filesystem.hpp>
 
 /// Start this instance.
 bool ProcessInstance::start_instance()
@@ -206,6 +207,56 @@ bool DnsmasqInstance::execute_process()
          "-k", // keep in foreground
          "-C",
          _cfgfile.c_str(),
+         (char*)NULL);
+  perror("execlp");
+  return false;
+}
+
+ChronosInstance::ChronosInstance(const std::string& ip,
+                                 int port,
+                                 const std::string& instance_dir) :
+  ProcessInstance(ip, port),
+  _instance_dir(instance_dir),
+  _log_dir(_instance_dir + "/log"),
+  _conf_dir(_instance_dir + "/conf"),
+  _conf_file(_conf_dir + "/chronos.conf")
+{
+  boost::filesystem::create_directory(_instance_dir);
+  boost::filesystem::create_directory(_log_dir);
+  boost::filesystem::create_directory(_conf_dir);
+
+  std::ofstream config;
+  config.open(_conf_file);
+  config << "[logging]\n"
+         << "level = " << get_log_level() << "\n"
+         << "folder = " << _log_dir << "\n"
+         << "\n"
+         << "[http]\n"
+         << "bind-address = " << _ip << "\n"
+         << "bind-port = " << _port << "\n"
+         << "\n"
+         << "[throttling]\n"
+         << "max_tokens = 1000\n"
+         << "\n"
+         << "[cluster]\n"
+         << "localhost = " << _ip << ":" << _port << "\n";
+
+  config.close();
+}
+
+ChronosInstance::~ChronosInstance()
+{
+  boost::filesystem::remove_all(_instance_dir);
+}
+
+bool ChronosInstance::execute_process()
+{
+  // Start Chronos. execlp only returns if an error has occurred, in which case
+  // return false.
+  printf("Starting chronos\n");
+  execlp("../modules/chronos/build/bin/chronos",
+         "chronos",
+         "--local-config-file", _conf_file.c_str(),
          (char*)NULL);
   perror("execlp");
   return false;
