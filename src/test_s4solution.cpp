@@ -22,7 +22,7 @@
 
 /// TODO
 ///
-/// A bunch of this code is copy-pasted from BAseMemcachedsolutionTest. Need to
+/// A bunch of this code is copy-pasted from BaseMemcachedsolutionTest. Need to
 /// refactor this.
 
 static const int BASE_MEMCACHED_PORT = 33333;
@@ -39,6 +39,7 @@ public:
   static void SetUpTestCase()
   {
     signal(SIGSEGV, signal_handler);
+    signal(SIGINT, signal_handler);
 
     // Create a directory to store the various config files that we are going to
     // need.
@@ -49,6 +50,7 @@ public:
   static void TearDownTestCase()
   {
     signal(SIGSEGV, SIG_DFL);
+    signal(SIGINT, SIG_DFL);
 
     _memcached_instances.clear();
     _rogers_instances.clear();
@@ -224,16 +226,11 @@ std::shared_ptr<DnsmasqInstance> BaseS4SolutionTest::_dnsmasq_instance;
 /// cluster_settings file.
 void BaseS4SolutionTest::signal_handler(int sig)
 {
-  signal(SIGSEGV, SIG_DFL);
+  // Clean up the testcase.
+  TearDownTestCase();
 
-  BaseS4SolutionTest::_memcached_instances.clear();
-  BaseS4SolutionTest::_rogers_instances.clear();
-  BaseS4SolutionTest::_dnsmasq_instance.reset();
-
-  if (remove("cluster_settings") != 0)
-  {
-    perror("remove cluster_settings");
-  }
+  // Re-raise to signal to cause the script to exit.
+  raise(sig);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -276,5 +273,5 @@ class SimpleS4SolutionTest : public BaseS4SolutionTest
 /// Add a key and retrieve it.
 TEST_F(SimpleS4SolutionTest, Mainline)
 {
-  sleep(86400); // 1 day
+  sleep(86400);  // 1 day
 }
