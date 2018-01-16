@@ -18,6 +18,7 @@
 #include <fstream>
 #include <stdio.h>
 #include <thread>
+#include <boost/filesystem.hpp>
 
 /// TODO
 ///
@@ -26,6 +27,7 @@
 
 static const int BASE_MEMCACHED_PORT = 33333;
 static const int ROGERS_PORT = 11311;
+static const int CHRONOS_PORT = 7253;
 
 /// Fixture for all memcached solution tests.
 class BaseS4SolutionTest : public ::testing::Test
@@ -37,12 +39,28 @@ public:
   static void SetUpTestCase()
   {
     signal(SIGSEGV, signal_handler);
+
+    // Create a directory to store the various config files that we are going to
+    // need.
+    boost::filesystem::create_directory("tmp");
   }
 
   /// TODO
   static void TearDownTestCase()
   {
     signal(SIGSEGV, SIG_DFL);
+
+    _memcached_instances.clear();
+    _rogers_instances.clear();
+    _chronos_instances.clear();
+    _dnsmasq_instance.reset();
+
+    if (remove("cluster_settings") != 0)
+    {
+      perror("remove cluster_settings");
+    }
+
+    boost::filesystem::remove_all("tmp");
   }
 
   /// TODO
@@ -100,6 +118,35 @@ public:
     }
   }
 
+  /// Creates and starts up the specified number of chronos instances.
+  static void create_and_start_chronos_instances(int chronos_instances)
+  {
+    // Create directory to hold chronos config and logs.
+    boost::filesystem::create_directory("tmp/chronos");
+
+    // Create the chronos config that is common across all nodes in the cluster.
+    std::string cluster_conf_file = "tmp/chronos/chronos_cluster.conf";
+    std::ofstream conf;
+    conf.open(cluster_conf_file);
+    conf << "[cluster]\n";
+    for (int ii = 0; ii < chronos_instances; ++ii)
+    {
+      conf << "node = 127.0.0." + std::to_string(ii + 1) + ":" + std::to_string(CHRONOS_PORT) + "\n";
+    }
+    conf.close();
+
+    for (int ii = 0; ii < chronos_instances; ++ii)
+    {
+      std::string ip = "127.0.0." + std::to_string(ii + 1);
+      std::string dir = "tmp/chronos/instance" + std::to_string(ii + 1);
+      _chronos_instances.emplace_back(new ChronosInstance(ip,
+                                                          CHRONOS_PORT,
+                                                          dir,
+                                                          cluster_conf_file));
+      _chronos_instances.back()->start_instance();
+    }
+  }
+
   /// Creates and starts up a dnsmasq instance to allow S4 to find remote
   /// processes.
   static void create_and_start_dns(
@@ -144,6 +191,16 @@ public:
       }
     }
 
+    for (const std::shared_ptr<ChronosInstance>& inst : _chronos_instances)
+    {
+      success = inst->wait_for_instance();
+
+      if (!success)
+      {
+        return success;
+      }
+    }
+
     if (_dnsmasq_instance)
     {
       success = _dnsmasq_instance->wait_for_instance();
@@ -161,11 +218,13 @@ public:
   /// freed when the vector is cleared.
   static std::vector<std::shared_ptr<MemcachedInstance>> _memcached_instances;
   static std::vector<std::shared_ptr<RogersInstance>> _rogers_instances;
+  static std::vector<std::shared_ptr<ChronosInstance>> _chronos_instances;
   static std::shared_ptr<DnsmasqInstance> _dnsmasq_instance;
 };
 
 std::vector<std::shared_ptr<MemcachedInstance>> BaseS4SolutionTest::_memcached_instances;
 std::vector<std::shared_ptr<RogersInstance>> BaseS4SolutionTest::_rogers_instances;
+std::vector<std::shared_ptr<ChronosInstance>> BaseS4SolutionTest::_chronos_instances;
 std::shared_ptr<DnsmasqInstance> BaseS4SolutionTest::_dnsmasq_instance;
 
 /// Clear all the memcached and Rogers instances. This calls their
@@ -196,18 +255,22 @@ class SimpleS4SolutionTest : public BaseS4SolutionTest
 {
   static void SetUpTestCase()
   {
+    BaseS4SolutionTest::SetUpTestCase();
+
     create_and_start_memcached_instances(2);
     create_and_start_rogers_instances(2);
+    create_and_start_chronos_instances(2);
     create_and_start_dns(_rogers_instances);
+  }
 
-    BaseS4SolutionTest::SetUpTestCase();
+  static void TearDownTestCase()
+  {
+    BaseS4SolutionTest::TearDownTestCase();
   }
 };
 
 /// Add a key and retrieve it.
 TEST_F(SimpleS4SolutionTest, Mainline)
 {
-  ChronosInstance chronos("127.0.0.1", 7251, "chronos.1");
-  chronos.start_instance();
-  sleep(60);
+  sleep(86400); // 1 day
 }

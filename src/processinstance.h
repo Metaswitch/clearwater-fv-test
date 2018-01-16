@@ -67,7 +67,10 @@ private:
 class ChronosInstance : public ProcessInstance
 {
 public:
-  ChronosInstance(const std::string& ip, int port, const std::string& instance_dir);
+  ChronosInstance(const std::string& ip,
+                  int port,
+                  const std::string& instance_dir,
+                  const std::string& cluster_conf_file);
   virtual ~ChronosInstance();
   bool execute_process();
 
@@ -75,5 +78,6 @@ private:
   std::string _instance_dir;
   std::string _log_dir;
   std::string _conf_dir;
-  std::string _conf_file;
+  std::string _local_conf_file;
+  std::string _cluster_conf_file;
 };

@@ -214,19 +214,21 @@ bool DnsmasqInstance::execute_process()
 
 ChronosInstance::ChronosInstance(const std::string& ip,
                                  int port,
-                                 const std::string& instance_dir) :
+                                 const std::string& instance_dir,
+                                 const std::string& cluster_conf_file) :
   ProcessInstance(ip, port),
   _instance_dir(instance_dir),
   _log_dir(_instance_dir + "/log"),
   _conf_dir(_instance_dir + "/conf"),
-  _conf_file(_conf_dir + "/chronos.conf")
+  _local_conf_file(_conf_dir + "/chronos.conf"),
+  _cluster_conf_file(cluster_conf_file)
 {
   boost::filesystem::create_directory(_instance_dir);
   boost::filesystem::create_directory(_log_dir);
   boost::filesystem::create_directory(_conf_dir);
 
   std::ofstream config;
-  config.open(_conf_file);
+  config.open(_local_conf_file);
   config << "[logging]\n"
          << "level = " << get_log_level() << "\n"
          << "folder = " << _log_dir << "\n"
@@ -253,10 +255,10 @@ bool ChronosInstance::execute_process()
 {
   // Start Chronos. execlp only returns if an error has occurred, in which case
   // return false.
-  printf("Starting chronos\n");
   execlp("../modules/chronos/build/bin/chronos",
          "chronos",
-         "--local-config-file", _conf_file.c_str(),
+         "--local-config-file", _local_conf_file.c_str(),
+         "--cluster-config-file", _cluster_conf_file.c_str(),
          (char*)NULL);
   perror("execlp");
   return false;
