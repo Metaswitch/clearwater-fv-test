@@ -149,18 +149,10 @@ public:
 
   /// Creates and starts up a dnsmasq instance to allow S4 to find remote
   /// processes.
-  static void create_and_start_dns(
-    const std::vector<std::shared_ptr<RogersInstance>>& rogers)
+  static void create_and_start_dns(const std::map<std::string, std::vector<std::string>>& a_records)
   {
-    std::vector<std::string> hosts;
-
-    for(const std::shared_ptr<RogersInstance>& instance : rogers)
-    {
-      hosts.push_back(instance->ip());
-    }
-
     _dnsmasq_instance = std::shared_ptr<DnsmasqInstance>(
-      new DnsmasqInstance("127.0.0.1", 5353, {{"rogers.local", hosts}}));
+      new DnsmasqInstance("127.0.0.1", 5353, a_records));
     _dnsmasq_instance->start_instance();
   }
 
@@ -260,7 +252,19 @@ class SimpleS4SolutionTest : public BaseS4SolutionTest
     create_and_start_memcached_instances(2);
     create_and_start_rogers_instances(2);
     create_and_start_chronos_instances(2);
-    create_and_start_dns(_rogers_instances);
+
+    // Generate the DNS records for rogers and chronos, and start dnsmasq to
+    // serve these.
+    std::map<std::string, std::vector<std::string>> a_records;
+    for (const std::shared_ptr<RogersInstance> inst : _rogers_instances)
+    {
+      a_records["rogers.local"].push_back(inst->ip());
+    }
+    for (const std::shared_ptr<ChronosInstance> inst : _chronos_instances)
+    {
+      a_records["chronos.local"].push_back(inst->ip());
+    }
+    create_and_start_dns(a_records);
   }
 
   static void TearDownTestCase()
