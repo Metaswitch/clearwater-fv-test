@@ -13,3 +13,6 @@
 [submodule "modules/chronos"]
 	path = modules/chronos
 	url = git@github.com:Metaswitch/chronos.git
+[submodule "modules/clearwater-s4"]
+	path = modules/clearwater-s4
+	url = git@github.com:Metaswitch/clearwater-s4.git

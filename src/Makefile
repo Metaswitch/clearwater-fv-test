@@ -39,11 +39,16 @@ TARGET_SOURCES_TEST := memcachedstore.cpp \
                        snmp_ip_time_based_counter_table.cpp \
                        snmp_time_and_string_based_event_table.cpp \
                        snmp_scalar.cpp \
+                       snmp_agent.cpp \
                        log.cpp \
                        logger.cpp \
                        fakelogger.cpp \
                        dnscachedresolver.cpp \
                        dnsparser.cpp \
+                       aor.cpp \
+                       associated_uris.cpp \
+                       astaire_aor_store.cpp \
+                       s4.cpp \
                        test_main.cpp \
                        test_dns.cpp \
                        test_snmp.cpp \
@@ -74,10 +79,11 @@ CPPFLAGS += -Wno-write-strings \
 CPPFLAGS += -I${ROOT}/include \
             -I${ASTAIRE_INCLUDES} \
             -I${ROOT}/modules/cpp-common/include \
+            -I${ROOT}/modules/clearwater-s4/include \
             -I${ROOT}/modules/rapidjson/include
 
-# Add cpp-common/src as a VPATH to pull in required production code
-VPATH := ${ROOT}/modules/cpp-common/src ${ROOT}/modules/cpp-common/test_utils
+# Add cpp-common and S4 as a VPATH to pull in required production code
+VPATH := ${ROOT}/modules/cpp-common/src ${ROOT}/modules/cpp-common/test_utils ${ROOT}/modules/clearwater-s4/src
 
 # Test build:
 #

@@ -12,6 +12,9 @@
 #include "gtest/gtest.h"
 
 #include "processinstance.h"
+#include "memcachedstore.h"
+#include "astaire_aor_store.h"
+#include "s4.h"
 
 #include <vector>
 #include <iostream>
@@ -68,12 +71,24 @@ public:
   /// TODO
   virtual void SetUp()
   {
+    _dns_client = new DnsCachedResolver("127.0.0.1", 5353);
+    _resolver = new AstaireResolver(_dns_client, AF_INET);
+    _store = new TopologyNeutralMemcachedStore("rogers.local", _resolver, true);
+    _aor_store = new AstaireAoRStore(_store);
+    //TODO Create remote S4s.
+    _local_s4 = new S4("local-s4", _aor_store, _remote_s4s);
+
     // Ensure all our instances are running.
     EXPECT_TRUE(wait_for_instances());
   }
 
   virtual void TearDown()
   {
+    delete _local_s4; _local_s4 = NULL;
+    delete _aor_store; _aor_store = NULL;
+    delete _store; _store = NULL;
+    delete _resolver; _resolver = NULL;
+    delete _dns_client; _dns_client = NULL;
   }
 
   /// Creates and starts up the specified number of memcached instances. Also
@@ -207,6 +222,13 @@ public:
 
     return success;
   }
+
+  DnsCachedResolver* _dns_client;
+  AstaireResolver* _resolver;
+  TopologyNeutralMemcachedStore* _store;
+  AoRStore* _aor_store;
+  S4* _local_s4;
+  std::vector<S4*> _remote_s4s;
 
   /// Use shared pointers for managing the instances so that the memory gets
   /// freed when the vector is cleared.
