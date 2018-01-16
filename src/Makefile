@@ -163,18 +163,17 @@ test: run_test vg vg-check
 # Run the test.  You can set:
 # -  JUSTTEST to specify a filter to pass to gtest.
 # -  EXTRA_TEST_ARGS to pass extra arguments to the test.
-# -  MEMCACHED_PORT to specify what port memcached should use.
 #
 # Ignore failure here; it will be detected by Jenkins.
 .PHONY: run_test
 run_test: build_test | $(TEST_OUT_DIR)
 	rm -f $(TEST_XML)
 	rm -f $(OBJ_DIR_TEST)/*.gcda
-	LD_LIBRARY_PATH=${ASTAIRE_LIBS} ./fvtest $(TARGET_BIN_TEST) $(EXTRA_TEST_ARGS) --gtest_output=xml:$(TEST_XML)
+	LD_LIBRARY_PATH=${ASTAIRE_LIBS} $(TARGET_BIN_TEST) $(EXTRA_TEST_ARGS) --gtest_output=xml:$(TEST_XML)
 
 .PHONY: debug
 debug: build_test
-	LD_LIBRARY_PATH=${ASTAIRE_LIBS} ./fvtest gdb --args $(TARGET_BIN_TEST) $(EXTRA_TEST_ARGS)
+	LD_LIBRARY_PATH=${ASTAIRE_LIBS} gdb --args $(TARGET_BIN_TEST) $(EXTRA_TEST_ARGS)
 
 # Don't run VG against death tests; they don't play nicely.
 # Be aware that running this will count towards coverage.
@@ -184,7 +183,7 @@ debug: build_test
 # test failure from Jenkins.
 .PHONY: vg
 vg: build_test | $(TEST_OUT_DIR)
-	LD_LIBRARY_PATH=${ASTAIRE_LIBS} ./fvtest valgrind --xml=yes --xml-file=$(VG_XML) $(VGFLAGS) \
+	LD_LIBRARY_PATH=${ASTAIRE_LIBS} valgrind --xml=yes --xml-file=$(VG_XML) $(VGFLAGS) \
 	  $(TARGET_BIN_TEST) --gtest_filter='-*DeathTest*' $(EXTRA_TEST_ARGS) > $(VG_OUT) 2>&1
 
 # Check whether there were any errors from valgrind. Output to screen any errors found,
@@ -205,7 +204,7 @@ vg-check: vg
 
 .PHONY: vg_raw
 vg_raw: build_test | $(TEST_OUT_DIR)
-	LD_LIBRARY_PATH=${ASTAIRE_LIBS} ./fvtest valgrind --gen-suppressions=all $(VGFLAGS) \
+	LD_LIBRARY_PATH=${ASTAIRE_LIBS} valgrind --gen-suppressions=all $(VGFLAGS) \
 	  $(TARGET_BIN_TEST) --gtest_filter='-*DeathTest*' $(EXTRA_TEST_ARGS)
 
 .PHONY: distclean
