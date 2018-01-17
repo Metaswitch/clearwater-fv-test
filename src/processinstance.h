@@ -40,7 +40,7 @@ private:
 class MemcachedInstance : public ProcessInstance
 {
 public:
-  MemcachedInstance(int port) : ProcessInstance(port) {};
+  MemcachedInstance(const std::string& ip, int port) : ProcessInstance(ip, port) {};
   virtual bool execute_process();
 };
 

@@ -129,7 +129,7 @@ bool MemcachedInstance::execute_process()
   execlp("/usr/bin/memcached",
          "memcached",
          "-l",
-         "127.0.0.1",
+         _ip.c_str(),
          "-p",
          std::to_string(_port).c_str(),
          "-e",
@@ -253,6 +253,13 @@ ChronosInstance::~ChronosInstance()
 
 bool ChronosInstance::execute_process()
 {
+  // Redirect stdout and stderr to a log file to avoid cluttering up the test
+  // output (and also so we can tell what chronos instance it came from).
+  std::string out_file = _log_dir + "/chronos_stdout.txt";
+  std::string err_file = _log_dir + "/chronos_stderr.txt";
+  freopen(out_file.c_str(), "a", stdout);
+  freopen(err_file.c_str(), "a", stderr);
+
   // Start Chronos. execlp only returns if an error has occurred, in which case
   // return false.
   execlp("../modules/chronos/build/bin/chronos",

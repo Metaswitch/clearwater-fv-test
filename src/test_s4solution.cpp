@@ -29,7 +29,7 @@
 /// refactor this.
 
 SAS::TrailId FAKE_SAS_TRAIL_ID = 0x12345678;
-static const int BASE_MEMCACHED_PORT = 33333;
+static const int MEMCACHED_PORT = 33333;
 static const int ROGERS_PORT = 11311;
 static const int CHRONOS_PORT = 7253;
 
@@ -96,7 +96,7 @@ public:
   /// sets up the appropriate cluster_settings file (which just contains a
   /// single line of the form:
   ///
-  ///   servers=127.0.0.1:33333,127.0.0.1:33334,...
+  ///   servers=127.0.0.1:33333,127.0.0.2:33333,...
   ///
   static void create_and_start_memcached_instances(int memcached_instances)
   {
@@ -113,13 +113,12 @@ public:
         cluster_settings << ",";
       }
 
-      // Each instance should listen on a new port.
-      int port = BASE_MEMCACHED_PORT + ii;
-      _memcached_instances.emplace_back(new MemcachedInstance(port));
+      // Each instance should listen on a new IP address.
+      std::string ip = "127.0.0." + std::to_string(ii + 1);
+      _memcached_instances.emplace_back(new MemcachedInstance(ip, MEMCACHED_PORT));
       _memcached_instances.back()->start_instance();
 
-      cluster_settings << "127.0.0.1:";
-      cluster_settings << std::to_string(port).c_str();
+      cluster_settings << ip << ":" << std::to_string(MEMCACHED_PORT);
     }
 
     cluster_settings.close();
@@ -294,7 +293,7 @@ class SimpleS4SolutionTest : public BaseS4SolutionTest
 };
 
 /// Add a key and retrieve it.
-TEST_F(SimpleS4SolutionTest, Mainline)
+TEST_F(SimpleS4SolutionTest, TracerBullet)
 {
   const std::string impu = "sip:kermit@muppets.com";
 
