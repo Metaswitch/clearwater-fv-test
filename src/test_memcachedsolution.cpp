@@ -110,19 +110,17 @@ public:
   /// the instances fail to come up.
   static bool wait_for_instances()
   {
-    bool success = true;
-
-    if (_dnsmasq_instance)
+    if (!_dbs->wait_for_instances())
     {
-      success = _dnsmasq_instance->wait_for_instance();
-
-      if (!success)
-      {
-        return success;
-      }
+      return false;
     }
 
-    return success;
+    if (_dnsmasq_instance && !_dnsmasq_instance->wait_for_instance())
+    {
+      return false;
+    }
+
+    return true;
   }
 
   /// Helper method for setting data in memcached for the test's default key.
