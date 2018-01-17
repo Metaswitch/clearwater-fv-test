@@ -47,8 +47,14 @@ public:
 class RogersInstance : public ProcessInstance
 {
 public:
-  RogersInstance(const std::string& ip, int port) : ProcessInstance(ip, port) {};
+  RogersInstance(const std::string& ip, int port, const std::string& cluster_settings_file) :
+    ProcessInstance(ip, port),
+    _cluster_settings_file(cluster_settings_file)
+  {};
   virtual bool execute_process();
+
+private:
+  std::string _cluster_settings_file;
 };
 
 class DnsmasqInstance : public ProcessInstance

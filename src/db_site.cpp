@@ -34,11 +34,6 @@ DbSite::~DbSite()
   _rogers_instances.clear();
   _chronos_instances.clear();
 
-  if (remove("cluster_settings") != 0)
-  {
-    perror("remove cluster_settings");
-  }
-
   boost::filesystem::remove_all(_site_dir);
 }
 
@@ -51,7 +46,7 @@ std::string DbSite::site_ip(int index)
 
 void DbSite::create_and_start_memcached_instances(int memcached_instances)
 {
-  std::ofstream cluster_settings("cluster_settings");
+  std::ofstream cluster_settings(_site_dir + "/cluster_settings");
 
   for (int ii = 0; ii < memcached_instances; ++ii)
   {
@@ -80,7 +75,9 @@ void DbSite::create_and_start_rogers_instances(int rogers_instances)
 {
   for (int ii = 0; ii < rogers_instances; ++ii)
   {
-    _rogers_instances.emplace_back(new RogersInstance(site_ip(ii + 1), ROGERS_PORT));
+    _rogers_instances.emplace_back(new RogersInstance(site_ip(ii + 1),
+                                                      ROGERS_PORT,
+                                                      _site_dir + "/cluster_settings"));
     _rogers_instances.back()->start_instance();
   }
 }

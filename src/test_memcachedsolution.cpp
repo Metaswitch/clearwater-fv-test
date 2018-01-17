@@ -136,7 +136,7 @@ public:
     for (int ii = 0; ii < rogers_instances; ++ii)
     {
       std::string ip = "127.0.0." + std::to_string(ii + 1);
-      _rogers_instances.emplace_back(new RogersInstance(ip, ROGERS_PORT));
+      _rogers_instances.emplace_back(new RogersInstance(ip, ROGERS_PORT, "./cluster_settings"));
       _rogers_instances.back()->start_instance();
     }
   }

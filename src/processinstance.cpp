@@ -170,7 +170,7 @@ bool RogersInstance::execute_process()
          "--bind-addr",
          _ip.c_str(),
          "--cluster-settings-file",
-         "./cluster_settings",
+         _cluster_settings_file.c_str(),
          "--log-level",
          get_log_level().c_str(),
          (char*)NULL);
