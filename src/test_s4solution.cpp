@@ -28,6 +28,7 @@
 /// A bunch of this code is copy-pasted from BaseMemcachedsolutionTest. Need to
 /// refactor this.
 
+SAS::TrailId FAKE_SAS_TRAIL_ID = 0x12345678;
 static const int BASE_MEMCACHED_PORT = 33333;
 static const int ROGERS_PORT = 11311;
 static const int CHRONOS_PORT = 7253;
@@ -295,5 +296,18 @@ class SimpleS4SolutionTest : public BaseS4SolutionTest
 /// Add a key and retrieve it.
 TEST_F(SimpleS4SolutionTest, Mainline)
 {
-  sleep(86400);  // 1 day
+  const std::string impu = "sip:kermit@muppets.com";
+
+  AoR* aor = new AoR(impu);
+  aor->_notify_cseq = 123;
+  Binding* b = new Binding(impu);
+  b->_expires = time(NULL) + 3600;
+  aor->_bindings[impu] = b;
+
+  _local_s4->handle_put(impu, aor, FAKE_SAS_TRAIL_ID);
+
+  uint64_t cas;
+  _local_s4->handle_get("sip:kermit@muppets.com", &aor, cas, FAKE_SAS_TRAIL_ID);
+
+  EXPECT_EQ(aor->_notify_cseq, 123);
 }
