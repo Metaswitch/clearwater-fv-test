@@ -172,3 +172,21 @@ std::vector<std::string> DbSite::get_rogers_ips()
 
   return ips;
 }
+
+
+std::shared_ptr<ChronosInstance> DbSite::get_first_chronos()
+{
+  return _chronos_instances.back();
+}
+
+
+std::shared_ptr<RogersInstance> DbSite::get_first_rogers()
+{
+  return _rogers_instances.back();
+}
+
+
+std::shared_ptr<MemcachedInstance> DbSite::get_first_memcached()
+{
+  return _memcached_instances.back();
+}

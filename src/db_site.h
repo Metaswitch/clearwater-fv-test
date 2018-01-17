@@ -47,7 +47,16 @@ public:
   std::vector<std::string> get_chronos_ips();
 
   /// Get a list of the IP addresses of all the rogers processes.
-  std::vector<std::string> get_rogers_ips();;
+  std::vector<std::string> get_rogers_ips();
+
+  /// Returns a pointer to the first chronos instance in this site.
+  std::shared_ptr<ChronosInstance> get_first_chronos();
+
+  /// Returns a pointer to the first rogers instance in this site.
+  std::shared_ptr<RogersInstance> get_first_rogers();
+
+  /// Returns a pointer to the first memcached instance in this site.
+  std::shared_ptr<MemcachedInstance> get_first_memcached();
 
   /// Wait for all the processes in the site to successfully start up.
   ///

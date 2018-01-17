@@ -14,24 +14,22 @@
 
 #include "memcachedstore.h"
 #include "processinstance.h"
+#include "db_site.h"
 
 #include <vector>
 #include <iostream>
 #include <fstream>
 #include <stdio.h>
 #include <thread>
+#include <boost/filesystem.hpp>
 
 static const SAS::TrailId DUMMY_TRAIL_ID = 0x12345678;
-static const int MEMCACHED_PORT = 33333;
-static const int ROGERS_PORT = 11311;
 
 // Fixture for all memcached solution tests.
 //
 // This fixture:
 // - Creates a unique key and an instance of TopologyNeutralMemcachedStore for
 //   each test.
-// - Tidies up instances of memcached and Rogers and any config files between
-//   sets of tests.
 // - Provides helper methods for memcached operations and managing instances of
 //   memcached and Rogers
 class BaseMemcachedSolutionTest : public ::testing::Test
@@ -44,6 +42,13 @@ public:
   static void SetUpTestCase()
   {
     signal(SIGSEGV, signal_handler);
+    signal(SIGINT, signal_handler);
+
+    // Create a directory to store the various config files that we are going to
+    // need.
+    boost::filesystem::create_directory("tmp");
+
+    _dbs = std::shared_ptr<DbSite>(new DbSite(1, "tmp/site1"));
 
     _next_key = std::rand();
   }
@@ -53,16 +58,13 @@ public:
   /// cluster_settings file.
   static void TearDownTestCase()
   {
-    signal(SIGSEGV, SIG_DFL);
-
-    _memcached_instances.clear();
-    _rogers_instances.clear();
     _dnsmasq_instance.reset();
+    _dbs.reset();
 
-    if (remove("cluster_settings") != 0)
-    {
-      perror("remove cluster_settings");
-    }
+    boost::filesystem::remove_all("tmp");
+
+    signal(SIGSEGV, SIG_DFL);
+    signal(SIGINT, SIG_DFL);
   }
 
   /// Create a new store and a new unique key for this test. Also make sure that
@@ -96,65 +98,10 @@ public:
     _key = std::to_string(_next_key++);
   }
 
-  /// Creates and starts up the specified number of memcached instances. Also
-  /// sets up the appropriate cluster_settings file (which just contains a
-  /// single line of the form:
-  ///
-  ///   servers=127.0.0.1:33333,127.0.0.2:33333,...
-  ///
-  static void create_and_start_memcached_instances(int memcached_instances)
+  static void create_and_start_dns()
   {
-    std::ofstream cluster_settings("cluster_settings");
-
-    for (int ii = 0; ii < memcached_instances; ++ii)
-    {
-      if (ii == 0)
-      {
-        cluster_settings << "servers=";
-      }
-      else
-      {
-        cluster_settings << ",";
-      }
-
-      // Each instance should listen on a new IP address.
-      std::string ip = "127.0.0." + std::to_string(ii);
-      _memcached_instances.emplace_back(new MemcachedInstance(ip, MEMCACHED_PORT));
-      _memcached_instances.back()->start_instance();
-
-      cluster_settings << ip << ":" << std::to_string(MEMCACHED_PORT);
-    }
-
-    cluster_settings.close();
-  }
-
-  /// Creates and starts up the specified number of Rogers instances. We
-  /// currently only support one Rogers instance (since the port Rogers
-  /// listens on is not currently configurable).
-  static void create_and_start_rogers_instances(int rogers_instances)
-  {
-    for (int ii = 0; ii < rogers_instances; ++ii)
-    {
-      std::string ip = "127.0.0." + std::to_string(ii + 1);
-      _rogers_instances.emplace_back(new RogersInstance(ip, ROGERS_PORT, "./cluster_settings"));
-      _rogers_instances.back()->start_instance();
-    }
-  }
-
-  /// Creates and starts up a dnsmasq instance to allow the store to find
-  /// Rogers instances.
-  static void create_and_start_dns_for_rogers(
-    const std::vector<std::shared_ptr<RogersInstance>>& rogers)
-  {
-    std::vector<std::string> hosts;
-
-    for(const std::shared_ptr<RogersInstance>& instance : rogers)
-    {
-      hosts.push_back(instance->ip());
-    }
-
     _dnsmasq_instance = std::shared_ptr<DnsmasqInstance>(
-      new DnsmasqInstance("127.0.0.1", 5353, {{"rogers.local", hosts}}));
+      new DnsmasqInstance("127.0.0.1", 5353, {{"rogers.local", _dbs->get_rogers_ips()}}));
     _dnsmasq_instance->start_instance();
   }
 
@@ -164,26 +111,6 @@ public:
   static bool wait_for_instances()
   {
     bool success = true;
-
-    for (const std::shared_ptr<MemcachedInstance>& inst : _memcached_instances)
-    {
-      success = inst->wait_for_instance();
-
-      if (!success)
-      {
-        return success;
-      }
-    }
-
-    for (const std::shared_ptr<RogersInstance>& inst : _rogers_instances)
-    {
-      success = inst->wait_for_instance();
-
-      if (!success)
-      {
-        return success;
-      }
-    }
 
     if (_dnsmasq_instance)
     {
@@ -246,9 +173,8 @@ public:
 
   /// Use shared pointers for managing the instances so that the memory gets
   /// freed when the vector is cleared.
-  static std::vector<std::shared_ptr<MemcachedInstance>> _memcached_instances;
-  static std::vector<std::shared_ptr<RogersInstance>> _rogers_instances;
   static std::shared_ptr<DnsmasqInstance> _dnsmasq_instance;
+  static std::shared_ptr<DbSite> _dbs;
 
   /// Tests that use this fixture use a monotonically incrementing numerical key
   /// (so that tests are isolated from each other). This variable stores the
@@ -260,9 +186,8 @@ public:
   std::string _key;
 };
 
-std::vector<std::shared_ptr<MemcachedInstance>> BaseMemcachedSolutionTest::_memcached_instances;
-std::vector<std::shared_ptr<RogersInstance>> BaseMemcachedSolutionTest::_rogers_instances;
 std::shared_ptr<DnsmasqInstance> BaseMemcachedSolutionTest::_dnsmasq_instance;
+std::shared_ptr<DbSite> BaseMemcachedSolutionTest::_dbs;
 
 unsigned int BaseMemcachedSolutionTest::_next_key;
 const std::string BaseMemcachedSolutionTest::_table = "test_table";
@@ -272,16 +197,11 @@ const std::string BaseMemcachedSolutionTest::_table = "test_table";
 /// cluster_settings file.
 void BaseMemcachedSolutionTest::signal_handler(int sig)
 {
-  signal(SIGSEGV, SIG_DFL);
+  // Clean up the testcase.
+  TearDownTestCase();
 
-  BaseMemcachedSolutionTest::_memcached_instances.clear();
-  BaseMemcachedSolutionTest::_rogers_instances.clear();
-  BaseMemcachedSolutionTest::_dnsmasq_instance.reset();
-
-  if (remove("cluster_settings") != 0)
-  {
-    perror("remove cluster_settings");
-  }
+  // Re-raise to signal to cause the script to exit.
+  raise(sig);
 }
 
 /// A test fixture that can be parameterized over different "scenarios". This
@@ -291,11 +211,11 @@ class ParameterizedMemcachedSolutionTest : public BaseMemcachedSolutionTest
 {
   static void SetUpTestCase()
   {
-    create_and_start_memcached_instances(T::num_memcached_instances());
-    create_and_start_rogers_instances(T::num_rogers_instances());
-    create_and_start_dns_for_rogers(_rogers_instances);
-
     BaseMemcachedSolutionTest::SetUpTestCase();
+
+    _dbs->create_and_start_memcached_instances(T::num_memcached_instances());
+    _dbs->create_and_start_rogers_instances(T::num_rogers_instances());
+    create_and_start_dns();
   }
 };
 
@@ -318,13 +238,13 @@ class MemcachedFailsScenario
 
   static void trigger_failure(BaseMemcachedSolutionTest* fixture)
   {
-    EXPECT_TRUE(fixture->_memcached_instances.back()->kill_instance());
+    EXPECT_TRUE(fixture->_dbs->get_first_memcached()->kill_instance());
   }
 
   static void fix_failure(BaseMemcachedSolutionTest* fixture)
   {
-    EXPECT_TRUE(fixture->_memcached_instances.back()->start_instance());
-    EXPECT_TRUE(fixture->_memcached_instances.back()->wait_for_instance());
+    EXPECT_TRUE(fixture->_dbs->get_first_memcached()->start_instance());
+    EXPECT_TRUE(fixture->_dbs->get_first_memcached()->wait_for_instance());
   }
 };
 
@@ -336,8 +256,8 @@ class MemcachedRestartsScenario
 
   static void trigger_failure(BaseMemcachedSolutionTest* fixture)
   {
-    EXPECT_TRUE(fixture->_memcached_instances.back()->restart_instance());
-    EXPECT_TRUE(fixture->_memcached_instances.back()->wait_for_instance());
+    EXPECT_TRUE(fixture->_dbs->get_first_memcached()->restart_instance());
+    EXPECT_TRUE(fixture->_dbs->get_first_memcached()->wait_for_instance());
   }
 
   static void fix_failure(BaseMemcachedSolutionTest* fixture)
@@ -353,13 +273,13 @@ class RogersFailsScenario
 
   static void trigger_failure(BaseMemcachedSolutionTest* fixture)
   {
-    EXPECT_TRUE(fixture->_rogers_instances.back()->kill_instance());
+    EXPECT_TRUE(fixture->_dbs->get_first_rogers()->kill_instance());
   }
 
   static void fix_failure(BaseMemcachedSolutionTest* fixture)
   {
-    EXPECT_TRUE(fixture->_rogers_instances.back()->start_instance());
-    EXPECT_TRUE(fixture->_rogers_instances.back()->wait_for_instance());
+    EXPECT_TRUE(fixture->_dbs->get_first_rogers()->start_instance());
+    EXPECT_TRUE(fixture->_dbs->get_first_rogers()->wait_for_instance());
   }
 };
 
@@ -371,8 +291,8 @@ class RogersRestartsScenario
 
   static void trigger_failure(BaseMemcachedSolutionTest* fixture)
   {
-    EXPECT_TRUE(fixture->_rogers_instances.back()->restart_instance());
-    EXPECT_TRUE(fixture->_rogers_instances.back()->wait_for_instance());
+    EXPECT_TRUE(fixture->_dbs->get_first_rogers()->restart_instance());
+    EXPECT_TRUE(fixture->_dbs->get_first_rogers()->wait_for_instance());
   }
 
   static void fix_failure(BaseMemcachedSolutionTest* fixture)
@@ -391,11 +311,11 @@ class SimpleMemcachedSolutionTest : public BaseMemcachedSolutionTest
 {
   static void SetUpTestCase()
   {
-    create_and_start_memcached_instances(2);
-    create_and_start_rogers_instances(2);
-    create_and_start_dns_for_rogers(_rogers_instances);
-
     BaseMemcachedSolutionTest::SetUpTestCase();
+
+    _dbs->create_and_start_memcached_instances(2);
+    _dbs->create_and_start_rogers_instances(2);
+    create_and_start_dns();
   }
 };
 
@@ -649,7 +569,8 @@ TEST_F(SimpleMemcachedSolutionTest, AddDeleteSetDataContention)
 TEST_F(SimpleMemcachedSolutionTest, ConnectUsingIpAddress)
 {
   delete _store; _store = NULL;
-  _store = new TopologyNeutralMemcachedStore("127.0.0.1", _resolver, true);
+  std::string ip = _dbs->get_rogers_ips()[0];
+  _store = new TopologyNeutralMemcachedStore(ip, _resolver, true);
 
   uint64_t cas = 0;
   Store::Status rc;
