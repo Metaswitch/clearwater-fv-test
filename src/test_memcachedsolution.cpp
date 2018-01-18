@@ -48,7 +48,7 @@ public:
     // need.
     boost::filesystem::create_directory("tmp");
 
-    _dbs = std::shared_ptr<Site>(new Site(1, "tmp/site1"));
+    _dbs = std::shared_ptr<Site>(new Site(1, "site1", "tmp/site1"));
 
     _next_key = std::rand();
   }

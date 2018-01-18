@@ -19,13 +19,44 @@
 class Site
 {
 public:
+  /// A struct describing the externally visibly topology of the site - i.e.
+  /// what services are present and what domain names they are accessible at.
+  struct Topology
+  {
+    std::string chronos_domain;
+    std::string rogers_domain;
+
+    /// Set the chronos domain name.
+    ///
+    /// @param [in] domain The chronos domain name/
+    ///
+    /// @return This topology instance, so that the method can be used with the
+    ///         builder pattern.
+    Topology& with_chronos(const std::string& domain);
+
+    /// Set the rogers domain name.
+    ///
+    /// @param [in] domain The rogers domain name/
+    ///
+    /// @return This topology instance, so that the method can be used with the
+    ///         builder pattern.
+    Topology& with_rogers(const std::string& domain);
+  };
+
   /// Constructor
   ///
-  /// @param index [in] The (typically 1-based) index of the site. This must be
+  /// @param [in] index The (typically 1-based) index of the site. This must be
   ///                   unique across all sites.
-  /// @param dir [in]   A directory that the site may create and use to store
+  /// @param [in] name  The name of this site. Must be unique across all sites.
+  /// @param [in] dir   A directory that the site may create and use to store
   ///                   any temporary files it requires.
-  Site(int index, const std::string& dir);
+  /// @param [in] deployment_topology A mapping of site index to the topology of
+  ///                   that site. This is used to cluster GR databases
+  ///                   together.
+  Site(int index,
+       const std::string& site_name,
+       const std::string& dir,
+       std::map<std::string, Topology> deployment_topology = {});
   virtual ~Site();
 
   /// Creates and starts up the specified number of memcached instances.
@@ -70,8 +101,14 @@ private:
   /// Index of this site. Each site must have a different index.
   int _site_index;
 
+  /// The name of this site.
+  std::string _site_name;
+
   /// Directory this site may use for storing config files, log files, etc.
   std::string _site_dir;
+
+  /// The topology of all the sites in the deployment.
+  std::map<std::string, Topology> _deployment_topology;
 
   /// Use shared pointers for managing the instances so that the memory gets
   /// freed when the vector is cleared.

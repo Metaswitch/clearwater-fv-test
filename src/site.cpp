@@ -21,8 +21,14 @@ static const int ROGERS_PORT = 11311;
 static const int CHRONOS_PORT = 7253;
 
 
-Site::Site(int index, const std::string& dir) :
-  _site_index(index), _site_dir(dir)
+Site::Site(int index,
+           const std::string& name,
+           const std::string& dir,
+           std::map<std::string, Topology> deployment_topology) :
+  _site_index(index),
+  _site_name(name),
+  _site_dir(dir),
+  _deployment_topology(deployment_topology)
 {
   boost::filesystem::create_directory(_site_dir);
 }
@@ -88,6 +94,33 @@ void Site::create_and_start_chronos_instances(int chronos_instances)
   // Create directory to hold chronos config and logs.
   std::string chronos_dir = _site_dir + "/chronos";
   boost::filesystem::create_directory(chronos_dir);
+
+  // If we have a deployment topology, create a shared config file containing
+  // information about all the sites.
+  if (!_deployment_topology.empty())
+  {
+    std::string shared_conf_file = chronos_dir + "/chronos_shared.conf";
+    std::ofstream conf;
+    conf.open(shared_conf_file);
+    conf << "[sites]\n";
+
+    for (const std::pair<std::string, Topology>& item : _deployment_topology)
+    {
+      std::string name = item.first;
+      const Topology& tplg = item.second;
+
+      if (name == _site_name)
+      {
+        conf << "local_site = " << name << "\n";
+      }
+      else
+      {
+        conf << "remote_site = " << name << "=" << tplg.chronos_domain << "\n";
+      }
+    }
+
+    conf.close();
+  }
 
   // Create the chronos config that is common across all nodes in the cluster.
   std::string cluster_conf_file = chronos_dir + "/chronos_cluster.conf";
@@ -189,4 +222,18 @@ std::shared_ptr<RogersInstance> Site::get_first_rogers()
 std::shared_ptr<MemcachedInstance> Site::get_first_memcached()
 {
   return _memcached_instances.back();
+}
+
+
+Site::Topology& Site::Topology::with_chronos(const std::string& domain)
+{
+  chronos_domain = domain;
+  return *this;
+}
+
+
+Site::Topology& Site::Topology::with_rogers(const std::string& domain)
+{
+  rogers_domain = domain;
+  return *this;
 }

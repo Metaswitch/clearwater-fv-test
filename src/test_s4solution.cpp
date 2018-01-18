@@ -48,7 +48,13 @@ public:
     // need.
     boost::filesystem::create_directory("tmp");
 
-    _site1 = std::shared_ptr<Site>(new Site(1, "tmp/site1"));
+    _deployment_topology["site1"] =
+      Site::Topology().with_chronos("chronos.site1").with_rogers("rogers.site1");
+    _deployment_topology["site2"] =
+      Site::Topology().with_chronos("chronos.site2").with_rogers("rogers.site2");
+
+    _site1 = std::shared_ptr<Site>(new Site(1, "site1", "tmp/site1", _deployment_topology));
+    _site2 = std::shared_ptr<Site>(new Site(2, "site2", "tmp/site2", _deployment_topology));
   }
 
   /// TODO
@@ -56,6 +62,7 @@ public:
   {
     _dnsmasq_instance.reset();
     _site1.reset();
+    _site2.reset();
 
     boost::filesystem::remove_all("tmp");
 
@@ -105,6 +112,11 @@ public:
       return false;
     }
 
+    if (!_site2->wait_for_instances())
+    {
+      return false;
+    }
+
     if (_dnsmasq_instance && !_dnsmasq_instance->wait_for_instance())
     {
       return false;
@@ -123,11 +135,15 @@ public:
   /// Use shared pointers for managing the instances so that the memory gets
   /// freed when the vector is cleared.
   static std::shared_ptr<DnsmasqInstance> _dnsmasq_instance;
+  static std::map<std::string, Site::Topology> _deployment_topology;
   static std::shared_ptr<Site> _site1;
+  static std::shared_ptr<Site> _site2;
 };
 
 std::shared_ptr<DnsmasqInstance> BaseS4SolutionTest::_dnsmasq_instance;
+std::map<std::string, Site::Topology> BaseS4SolutionTest::_deployment_topology;
 std::shared_ptr<Site> BaseS4SolutionTest::_site1;
+std::shared_ptr<Site> BaseS4SolutionTest::_site2;
 
 /// Clear all the memcached and Rogers instances. This calls their
 /// destructors which will kill the underlying processes. Also remove the
@@ -157,12 +173,17 @@ class SimpleS4SolutionTest : public BaseS4SolutionTest
     _site1->create_and_start_memcached_instances(2);
     _site1->create_and_start_rogers_instances(2);
     _site1->create_and_start_chronos_instances(2);
+    _site2->create_and_start_memcached_instances(2);
+    _site2->create_and_start_rogers_instances(2);
+    _site2->create_and_start_chronos_instances(2);
 
     // Generate the DNS records for rogers and chronos, and start dnsmasq to
     // serve these.
     std::map<std::string, std::vector<std::string>> a_records;
-    a_records["rogers.site1"] = _site1->get_rogers_ips();
-    a_records["chronos.site1"] = _site1->get_chronos_ips();
+    a_records[_deployment_topology["site1"].rogers_domain] = _site1->get_rogers_ips();
+    a_records[_deployment_topology["site1"].chronos_domain] = _site1->get_chronos_ips();
+    a_records[_deployment_topology["site2"].rogers_domain] = _site2->get_rogers_ips();
+    a_records[_deployment_topology["site2"].chronos_domain] = _site2->get_chronos_ips();
 
     create_and_start_dns(a_records);
   }
