@@ -77,7 +77,8 @@ public:
   ChronosInstance(const std::string& ip,
                   int port,
                   const std::string& instance_dir,
-                  const std::string& cluster_conf_file);
+                  const std::string& cluster_conf_file,
+                  const std::string& shared_conf_file);
   virtual ~ChronosInstance();
   bool execute_process();
 
@@ -87,4 +88,5 @@ private:
   std::string _conf_dir;
   std::string _local_conf_file;
   std::string _cluster_conf_file;
+  std::string _shared_conf_file;
 };

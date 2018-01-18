@@ -225,13 +225,15 @@ bool DnsmasqInstance::execute_process()
 ChronosInstance::ChronosInstance(const std::string& ip,
                                  int port,
                                  const std::string& instance_dir,
-                                 const std::string& cluster_conf_file) :
+                                 const std::string& cluster_conf_file,
+                                 const std::string& shared_conf_file) :
   ProcessInstance(ip, port),
   _instance_dir(instance_dir),
   _log_dir(_instance_dir + "/log"),
   _conf_dir(_instance_dir + "/conf"),
   _local_conf_file(_conf_dir + "/chronos.conf"),
-  _cluster_conf_file(cluster_conf_file)
+  _cluster_conf_file(cluster_conf_file),
+  _shared_conf_file(shared_conf_file)
 {
   boost::filesystem::create_directory(_instance_dir);
   boost::filesystem::create_directory(_log_dir);
@@ -276,6 +278,7 @@ bool ChronosInstance::execute_process()
          "chronos",
          "--local-config-file", _local_conf_file.c_str(),
          "--cluster-config-file", _cluster_conf_file.c_str(),
+         "--shared-config-file", _shared_conf_file.c_str(),
          (char*)NULL);
   perror("execlp");
   return false;

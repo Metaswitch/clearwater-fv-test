@@ -100,14 +100,16 @@ void Site::create_chronos_instances(int count)
   std::string chronos_dir = _site_dir + "/chronos";
   boost::filesystem::create_directory(chronos_dir);
 
-  // If we have a deployment topology, create a shared config file containing
-  // information about all the sites.
+  // Create a shared config file. There is no harm in doing this even we haven't
+  // been told the deployment topology - in that case the file will just be
+  // empty.
+  std::string shared_conf_file = chronos_dir + "/chronos_shared.conf";
+  std::ofstream shared_conf;
+  shared_conf.open(shared_conf_file);
+
   if (!_deployment_topology.empty())
   {
-    std::string shared_conf_file = chronos_dir + "/chronos_shared.conf";
-    std::ofstream conf;
-    conf.open(shared_conf_file);
-    conf << "[sites]\n";
+    shared_conf << "[sites]\n";
 
     for (const std::pair<std::string, Topology>& item : _deployment_topology)
     {
@@ -116,36 +118,38 @@ void Site::create_chronos_instances(int count)
 
       if (name == _site_name)
       {
-        conf << "local_site = " << name << "\n";
+        shared_conf << "local_site = " << name << "\n";
       }
       else
       {
-        conf << "remote_site = " << name << "=" << tplg.chronos_domain << "\n";
+        shared_conf << "remote_site = " << name << "=" << tplg.chronos_domain << "\n";
       }
     }
-
-    conf.close();
   }
 
-  // Create the chronos config that is common across all nodes in the cluster.
+  shared_conf.close();
+
+  // Create the chronos config that is common across all nodes in the cluster,
+  // as well as the individual instances.
   std::string cluster_conf_file = chronos_dir + "/chronos_cluster.conf";
-  std::ofstream conf;
-  conf.open(cluster_conf_file);
-  conf << "[cluster]\n";
+  std::ofstream cluster_conf;
+  cluster_conf.open(cluster_conf_file);
+  cluster_conf << "[cluster]\n";
 
   for (int ii = 0; ii < count; ++ii)
   {
     std::string ip = site_ip(ii + 1);
-    conf << "node = " << ip << ":" << std::to_string(CHRONOS_PORT) << "\n";
+    cluster_conf << "node = " << ip << ":" << std::to_string(CHRONOS_PORT) << "\n";
 
     std::string dir = chronos_dir + "/instance" + std::to_string(ii + 1);
     _chronos_instances.emplace_back(new ChronosInstance(ip,
                                                         CHRONOS_PORT,
                                                         dir,
-                                                        cluster_conf_file));
+                                                        cluster_conf_file,
+                                                        shared_conf_file));
   }
 
-  conf.close();
+  cluster_conf.close();
 }
 
 
