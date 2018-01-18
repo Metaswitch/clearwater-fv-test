@@ -65,7 +65,7 @@ public:
         _remote_stores.push_back(
           new TopologyNeutralMemcachedStore(item.second.rogers_domain, _resolver, true));
         _remote_aor_stores.push_back(new AstaireAoRStore(_remote_stores.back()));
-        _remote_s4s.push_back(new S4("remote-s4-" + item.first,
+        _remote_s4s.push_back(new S4(site_name + "-remote-s4-to-" + item.first,
                                      _remote_aor_stores.back(),
                                      {}));
       }
@@ -76,7 +76,7 @@ public:
                                                _resolver,
                                                false);
     _aor_store = new AstaireAoRStore(_store);
-    s4 = new S4("local-s4-" + site_name, _aor_store, _remote_s4s);
+    s4 = new S4(site_name + "-local-s4", _aor_store, _remote_s4s);
   }
 
   /// Destructor.
@@ -274,16 +274,25 @@ TEST_F(SimpleS4SolutionTest, TracerBullet)
 {
   const std::string impu = "sip:kermit@muppets.com";
 
+  // PUT a binding to site 1.
   AoR* aor = new AoR(impu);
-  aor->_notify_cseq = 123;
   Binding* b = new Binding(impu);
   b->_expires = time(NULL) + 3600;
   aor->_bindings[impu] = b;
 
   _s4_site1->s4->handle_put(impu, aor, FAKE_SAS_TRAIL_ID);
 
-  uint64_t cas;
-  _s4_site1->s4->handle_get("sip:kermit@muppets.com", &aor, cas, FAKE_SAS_TRAIL_ID);
+  // Kill site 1.
+  _site1->kill();
+  delete _s4_site1; _s4_site1 = nullptr;
 
-  EXPECT_EQ(aor->_notify_cseq, 123);
+  // Get from site 2. This should work as S4 has replicated the PUT to the
+  // remote site.
+  uint64_t cas;
+  HTTPCode status = _s4_site2->s4->handle_get("sip:kermit@muppets.com",
+                                              &aor,
+                                              cas,
+                                              FAKE_SAS_TRAIL_ID);
+  EXPECT_EQ(status, HTTP_OK);
+  EXPECT_NE(aor, nullptr);
 }
