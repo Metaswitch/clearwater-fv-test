@@ -56,23 +56,11 @@ public:
   Site(int index,
        const std::string& site_name,
        const std::string& dir,
-       std::map<std::string, Topology> deployment_topology = {});
+       std::map<std::string, Topology> deployment_topology = {},
+       int num_memcached = 0,
+       int num_rogers = 0,
+       int num_chronos = 0);
   virtual ~Site();
-
-  /// Creates and starts up the specified number of memcached instances.
-  ///
-  /// @param count [in] The number of processes to start.
-  void create_and_start_memcached_instances(int memcached_instances);
-
-  /// Creates and starts up the specified number of rogers instances.
-  ///
-  /// @param count [in] The number of processes to start.
-  void create_and_start_rogers_instances(int rogers_instances);
-
-  /// Creates and starts up the specified number of chronos instances.
-  ///
-  /// @param count [in] The number of processes to start.
-  void create_and_start_chronos_instances(int chronos_instances);
 
   /// Get a list of the IP addresses of all the chronos processes.
   std::vector<std::string> get_chronos_ips();
@@ -89,12 +77,32 @@ public:
   /// Returns a pointer to the first memcached instance in this site.
   std::shared_ptr<MemcachedInstance> get_first_memcached();
 
-  /// Wait for all the processes in the site to successfully start up.
+  /// Start all processes in the site.
+  ///
+  /// @warning This does not wait for the instances to come up. This is so that
+  /// multipl sites and/or other processes can be started in parallel. Call
+  /// wait_for_instances before using the site.
+  void start();
+
+  /// Wait for all instances in the site to be started.
   ///
   /// @return Whether the processes have all started successfully.
   bool wait_for_instances();
 
 private:
+
+  /// Helper function to create the specified number of memcached instances.
+  /// @param [in] count - The number of instances to create.
+  void create_memcached_instances(int count);
+
+  /// Helper function to create the specified number of rogers instances.
+  /// @param [in] count - The number of instances to create.
+  void create_rogers_instances(int count);
+
+  /// Helper function to create the specified number of chronos instances.
+  /// @param [in] count - The number of instances to create.
+  void create_chronos_instances(int count);
+
   /// Utility function to get at one of the site IPs.
   std::string site_ip(int index);
 

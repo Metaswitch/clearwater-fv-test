@@ -125,8 +125,6 @@ public:
     _deployment_topology["site2"] =
       Site::Topology().with_chronos("chronos.site2").with_rogers("rogers.site2");
 
-    _site1 = std::shared_ptr<Site>(new Site(1, "site1", "tmp/site1", _deployment_topology));
-    _site2 = std::shared_ptr<Site>(new Site(2, "site2", "tmp/site2", _deployment_topology));
   }
 
   static void TearDownTestCase()
@@ -154,6 +152,29 @@ public:
   {
     delete _s4_site1; _s4_site1 = NULL;
     delete _s4_site2; _s4_site2 = NULL;
+  }
+
+  static void create_and_start_sites()
+  {
+    _site1 = std::shared_ptr<Site>(new Site(1,
+                                            "site1",
+                                            "tmp/site1",
+                                            _deployment_topology,
+                                            2,
+                                            2,
+                                            2));
+    _site1->start();
+    TRC_DEBUG("Started site1");
+
+    _site2 = std::shared_ptr<Site>(new Site(2,
+                                            "site2",
+                                            "tmp/site2",
+                                            _deployment_topology,
+                                            2,
+                                            2,
+                                            2));
+    _site2->start();
+    TRC_DEBUG("Started site2");
   }
 
   /// Creates and starts up a dnsmasq instance to allow S4 to find remote
@@ -229,12 +250,7 @@ class SimpleS4SolutionTest : public BaseS4SolutionTest
   {
     BaseS4SolutionTest::SetUpTestCase();
 
-    _site1->create_and_start_memcached_instances(2);
-    _site1->create_and_start_rogers_instances(2);
-    _site1->create_and_start_chronos_instances(2);
-    _site2->create_and_start_memcached_instances(2);
-    _site2->create_and_start_rogers_instances(2);
-    _site2->create_and_start_chronos_instances(2);
+    create_and_start_sites();
 
     // Generate the DNS records for rogers and chronos, and start dnsmasq to
     // serve these.
@@ -268,8 +284,6 @@ TEST_F(SimpleS4SolutionTest, TracerBullet)
 
   uint64_t cas;
   _s4_site1->s4->handle_get("sip:kermit@muppets.com", &aor, cas, FAKE_SAS_TRAIL_ID);
-
-  sleep(3600);
 
   EXPECT_EQ(aor->_notify_cseq, 123);
 }

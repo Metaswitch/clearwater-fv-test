@@ -13,6 +13,8 @@
 #include <fstream>
 #include <boost/filesystem.hpp>
 
+#include "log.h"
+
 #include "processinstance.h"
 #include "site.h"
 
@@ -24,13 +26,19 @@ static const int CHRONOS_PORT = 7253;
 Site::Site(int index,
            const std::string& name,
            const std::string& dir,
-           std::map<std::string, Topology> deployment_topology) :
+           std::map<std::string, Topology> deployment_topology,
+           int num_memcached,
+           int num_rogers,
+           int num_chronos) :
   _site_index(index),
   _site_name(name),
   _site_dir(dir),
   _deployment_topology(deployment_topology)
 {
   boost::filesystem::create_directory(_site_dir);
+  create_memcached_instances(num_memcached);
+  create_rogers_instances(num_rogers);
+  create_chronos_instances(num_chronos);
 }
 
 
@@ -50,11 +58,11 @@ std::string Site::site_ip(int index)
 }
 
 
-void Site::create_and_start_memcached_instances(int memcached_instances)
+void Site::create_memcached_instances(int count)
 {
   std::ofstream cluster_settings(_site_dir + "/cluster_settings");
 
-  for (int ii = 0; ii < memcached_instances; ++ii)
+  for (int ii = 0; ii < count; ++ii)
   {
     if (ii == 0)
     {
@@ -68,8 +76,6 @@ void Site::create_and_start_memcached_instances(int memcached_instances)
     // Each instance should listen on a new IP address.
     std::string ip = site_ip(ii + 1);
     _memcached_instances.emplace_back(new MemcachedInstance(ip, MEMCACHED_PORT));
-    _memcached_instances.back()->start_instance();
-
     cluster_settings << ip << ":" << std::to_string(MEMCACHED_PORT);
   }
 
@@ -77,19 +83,18 @@ void Site::create_and_start_memcached_instances(int memcached_instances)
 }
 
 
-void Site::create_and_start_rogers_instances(int rogers_instances)
+void Site::create_rogers_instances(int count)
 {
-  for (int ii = 0; ii < rogers_instances; ++ii)
+  for (int ii = 0; ii < count; ++ii)
   {
     _rogers_instances.emplace_back(new RogersInstance(site_ip(ii + 1),
                                                       ROGERS_PORT,
                                                       _site_dir + "/cluster_settings"));
-    _rogers_instances.back()->start_instance();
   }
 }
 
 
-void Site::create_and_start_chronos_instances(int chronos_instances)
+void Site::create_chronos_instances(int count)
 {
   // Create directory to hold chronos config and logs.
   std::string chronos_dir = _site_dir + "/chronos";
@@ -128,7 +133,7 @@ void Site::create_and_start_chronos_instances(int chronos_instances)
   conf.open(cluster_conf_file);
   conf << "[cluster]\n";
 
-  for (int ii = 0; ii < chronos_instances; ++ii)
+  for (int ii = 0; ii < count; ++ii)
   {
     std::string ip = site_ip(ii + 1);
     conf << "node = " << ip << ":" << std::to_string(CHRONOS_PORT) << "\n";
@@ -138,48 +143,63 @@ void Site::create_and_start_chronos_instances(int chronos_instances)
                                                         CHRONOS_PORT,
                                                         dir,
                                                         cluster_conf_file));
-    _chronos_instances.back()->start_instance();
   }
 
   conf.close();
 }
 
 
+void Site::start()
+{
+  for (const std::shared_ptr<MemcachedInstance>& inst : _memcached_instances)
+  {
+    inst->start_instance();
+  }
+
+  for (const std::shared_ptr<RogersInstance>& inst : _rogers_instances)
+  {
+    inst->start_instance();
+  }
+
+  for (const std::shared_ptr<ChronosInstance>& inst : _chronos_instances)
+  {
+    inst->start_instance();
+  }
+
+}
+
 bool Site::wait_for_instances()
 {
-  bool success = true;
+  TRC_DEBUG("Waiting for instances in %s", _site_name.c_str());
 
   for (const std::shared_ptr<MemcachedInstance>& inst : _memcached_instances)
   {
-    success = inst->wait_for_instance();
-
-    if (!success)
+    if (!inst->wait_for_instance())
     {
-      return success;
+      TRC_ERROR("Memcached instance %s:%d failed to start", inst->ip().c_str(), inst->port());
+      return false;
     }
   }
 
   for (const std::shared_ptr<RogersInstance>& inst : _rogers_instances)
   {
-    success = inst->wait_for_instance();
-
-    if (!success)
+    if (!inst->wait_for_instance())
     {
-      return success;
+      TRC_ERROR("Rogers instance %s:%d failed to start", inst->ip().c_str(), inst->port());
+      return false;
     }
   }
 
   for (const std::shared_ptr<ChronosInstance>& inst : _chronos_instances)
   {
-    success = inst->wait_for_instance();
-
-    if (!success)
+    if (!inst->wait_for_instance())
     {
-      return success;
+      TRC_ERROR("Chronos instance %s:%d failed to start", inst->ip().c_str(), inst->port());
+      return false;
     }
   }
 
-  return success;
+  return true;
 }
 
 

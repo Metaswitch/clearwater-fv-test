@@ -48,8 +48,6 @@ public:
     // need.
     boost::filesystem::create_directory("tmp");
 
-    _dbs = std::shared_ptr<Site>(new Site(1, "site1", "tmp/site1"));
-
     _next_key = std::rand();
   }
 
@@ -96,6 +94,17 @@ public:
   void get_new_key()
   {
     _key = std::to_string(_next_key++);
+  }
+
+  static void create_and_start_databases(int num_memcacheds, int num_rogers)
+  {
+    _dbs = std::shared_ptr<Site>(new Site(1,
+                                          "site1",
+                                          "tmp/site1",
+                                          {},
+                                          num_memcacheds,
+                                          num_rogers));
+    _dbs->start();
   }
 
   static void create_and_start_dns()
@@ -211,8 +220,8 @@ class ParameterizedMemcachedSolutionTest : public BaseMemcachedSolutionTest
   {
     BaseMemcachedSolutionTest::SetUpTestCase();
 
-    _dbs->create_and_start_memcached_instances(T::num_memcached_instances());
-    _dbs->create_and_start_rogers_instances(T::num_rogers_instances());
+    create_and_start_databases(T::num_memcached_instances(),
+                               T::num_rogers_instances());
     create_and_start_dns();
   }
 };
@@ -311,8 +320,8 @@ class SimpleMemcachedSolutionTest : public BaseMemcachedSolutionTest
   {
     BaseMemcachedSolutionTest::SetUpTestCase();
 
-    _dbs->create_and_start_memcached_instances(2);
-    _dbs->create_and_start_rogers_instances(2);
+    _dbs = std::shared_ptr<Site>(new Site(1, "site1", "tmp/site1", {}, 2, 2));
+    _dbs->start();
     create_and_start_dns();
   }
 };
