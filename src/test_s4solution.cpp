@@ -25,12 +25,85 @@
 #include <thread>
 #include <boost/filesystem.hpp>
 
-/// TODO
-///
-/// A bunch of this code is copy-pasted from BaseMemcachedsolutionTest. Need to
-/// refactor this.
-
 SAS::TrailId FAKE_SAS_TRAIL_ID = 0x12345678;
+
+/// Class containing everything needed for an "S4-site".
+///
+/// As S4 is currently a class rather than a microservice, each client actually
+/// needs multiple S4 instances:
+/// -  One S4 instance for each remote site, that only talks to databases in
+///    that site.
+/// -  One S4 instance for the local site that talks to databases in the local
+///    site, and "remote S4s" referred to in the previous bullet.
+///
+/// This class encapsulates all of this logic so that the test code can create
+/// all the necessary instances easily.
+class S4Site
+{
+public:
+  /// The local S4 instance. This is the one and only S4 that the tests should
+  /// access, so it is a public members (while the other S4 instances are
+  /// private).
+  S4* s4;
+
+  /// Constructor
+  ///
+  /// @param [in] site_name           - The name of the local database site that
+  ///                                   this S4 site talks to.
+  /// @param [in] deployment_topology - The topology of the entire deployment.
+  S4Site(const std::string& site_name, std::map<std::string, Site::Topology> deployment_topology)
+  {
+    // Create a DNS server and resolver.
+    _dns_client = new DnsCachedResolver("127.0.0.1", 5353);
+    _resolver = new AstaireResolver(_dns_client, AF_INET);
+
+    // Create all the remote S4s with their associated stores.
+    for (const std::pair<std::string, Site::Topology>& item: deployment_topology)
+    {
+      if (item.first != site_name)
+      {
+        _remote_stores.push_back(
+          new TopologyNeutralMemcachedStore(item.second.rogers_domain, _resolver, true));
+        _remote_aor_stores.push_back(new AstaireAoRStore(_remote_stores.back()));
+        _remote_s4s.push_back(new S4("remote-s4-" + item.first,
+                                     _remote_aor_stores.back(),
+                                     {}));
+      }
+    }
+
+    // Now create the local S4 and associated stores.
+    _store = new TopologyNeutralMemcachedStore(deployment_topology[site_name].rogers_domain,
+                                               _resolver,
+                                               false);
+    _aor_store = new AstaireAoRStore(_store);
+    s4 = new S4("local-s4-" + site_name, _aor_store, _remote_s4s);
+  }
+
+  /// Destructor.
+  virtual ~S4Site()
+  {
+    // Free everything off.
+    for (TopologyNeutralMemcachedStore* s : _remote_stores) { delete s; }
+    for (AoRStore* s : _remote_aor_stores) { delete s; }
+    for (S4* s : _remote_s4s) { delete s; }
+    delete s4; s4 = NULL;
+    delete _aor_store; _aor_store = NULL;
+    delete _store; _store = NULL;
+    delete _resolver; _resolver = NULL;
+    delete _dns_client; _dns_client = NULL;
+  }
+
+private:
+  AstaireResolver* _resolver;
+  DnsCachedResolver* _dns_client;
+
+  TopologyNeutralMemcachedStore* _store;
+  AoRStore* _aor_store;
+
+  std::vector<TopologyNeutralMemcachedStore*> _remote_stores;
+  std::vector<AoRStore*> _remote_aor_stores;
+  std::vector<S4*> _remote_s4s;
+};
 
 /// Fixture for all memcached solution tests.
 class BaseS4SolutionTest : public ::testing::Test
@@ -38,7 +111,6 @@ class BaseS4SolutionTest : public ::testing::Test
 public:
   static void signal_handler(int signal);
 
-  /// TODO
   static void SetUpTestCase()
   {
     signal(SIGSEGV, signal_handler);
@@ -57,7 +129,6 @@ public:
     _site2 = std::shared_ptr<Site>(new Site(2, "site2", "tmp/site2", _deployment_topology));
   }
 
-  /// TODO
   static void TearDownTestCase()
   {
     _dnsmasq_instance.reset();
@@ -70,15 +141,10 @@ public:
     signal(SIGINT, SIG_DFL);
   }
 
-  /// TODO
   virtual void SetUp()
   {
-    _dns_client = new DnsCachedResolver("127.0.0.1", 5353);
-    _resolver = new AstaireResolver(_dns_client, AF_INET);
-    _store = new TopologyNeutralMemcachedStore("rogers.site1", _resolver, true);
-    _aor_store = new AstaireAoRStore(_store);
-    //TODO Create remote S4s.
-    _local_s4 = new S4("local-s4", _aor_store, _remote_s4s);
+    _s4_site1 = new S4Site("site1", _deployment_topology);
+    _s4_site2 = new S4Site("site2", _deployment_topology);
 
     // Ensure all our instances are running.
     EXPECT_TRUE(wait_for_instances());
@@ -86,11 +152,8 @@ public:
 
   virtual void TearDown()
   {
-    delete _local_s4; _local_s4 = NULL;
-    delete _aor_store; _aor_store = NULL;
-    delete _store; _store = NULL;
-    delete _resolver; _resolver = NULL;
-    delete _dns_client; _dns_client = NULL;
+    delete _s4_site1; _s4_site1 = NULL;
+    delete _s4_site2; _s4_site2 = NULL;
   }
 
   /// Creates and starts up a dnsmasq instance to allow S4 to find remote
@@ -125,12 +188,8 @@ public:
     return true;
   }
 
-  DnsCachedResolver* _dns_client;
-  AstaireResolver* _resolver;
-  TopologyNeutralMemcachedStore* _store;
-  AoRStore* _aor_store;
-  S4* _local_s4;
-  std::vector<S4*> _remote_s4s;
+  S4Site* _s4_site1;
+  S4Site* _s4_site2;
 
   /// Use shared pointers for managing the instances so that the memory gets
   /// freed when the vector is cleared.
@@ -205,10 +264,12 @@ TEST_F(SimpleS4SolutionTest, TracerBullet)
   b->_expires = time(NULL) + 3600;
   aor->_bindings[impu] = b;
 
-  _local_s4->handle_put(impu, aor, FAKE_SAS_TRAIL_ID);
+  _s4_site1->s4->handle_put(impu, aor, FAKE_SAS_TRAIL_ID);
 
   uint64_t cas;
-  _local_s4->handle_get("sip:kermit@muppets.com", &aor, cas, FAKE_SAS_TRAIL_ID);
+  _s4_site1->s4->handle_get("sip:kermit@muppets.com", &aor, cas, FAKE_SAS_TRAIL_ID);
+
+  sleep(3600);
 
   EXPECT_EQ(aor->_notify_cseq, 123);
 }
