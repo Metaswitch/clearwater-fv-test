@@ -84,6 +84,16 @@ public:
   /// wait_for_instances before using the site.
   void start();
 
+  /// Restart all processes in the site.
+  ///
+  /// @warning This does not wait for the instances to come up. This is so that
+  /// multipl sites and/or other processes can be started in parallel. Call
+  /// wait_for_instances before using the site.
+  void restart();
+
+  /// Stop all processes in the site.
+  void kill();
+
   /// Wait for all instances in the site to be started.
   ///
   /// @return Whether the processes have all started successfully.
@@ -102,6 +112,12 @@ private:
   /// Helper function to create the specified number of chronos instances.
   /// @param [in] count - The number of instances to create.
   void create_chronos_instances(int count);
+
+  /// Utility function that does the same thing to each process in the site.
+  ///
+  /// @param [in] fn - A function that will be called on each process instance
+  ///                  in the site.
+  void for_each_instance(std::function<void(std::shared_ptr<ProcessInstance>)> fn);
 
   /// Utility function to get at one of the site IPs.
   std::string site_ip(int index);

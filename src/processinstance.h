@@ -17,7 +17,7 @@
 class ProcessInstance
 {
 public:
-  ProcessInstance(std::string ip, int port) : _ip(ip), _port(port) {};
+  ProcessInstance(std::string ip, int port) : _ip(ip), _port(port), _running(false) {};
   ProcessInstance(int port) : ProcessInstance("127.0.0.1", port) {};
   virtual ~ProcessInstance() { kill_instance(); }
 
@@ -35,6 +35,7 @@ private:
   std::string _ip;
   int _port;
   int _pid;
+  bool _running;
 };
 
 class MemcachedInstance : public ProcessInstance

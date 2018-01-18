@@ -46,6 +46,7 @@ bool ProcessInstance::start_instance()
   {
     // This is the original process, so save off the new PID and return true.
     _pid = pid;
+    _running = true;
     success = true;
   }
   return success;
@@ -56,16 +57,25 @@ bool ProcessInstance::kill_instance()
 {
   int status;
 
-  if (kill(_pid, SIGTERM) == 0)
+  if (_running)
   {
-    waitpid(_pid, &status, 0);
-    return (WIFSIGNALED(status) || WIFEXITED(status));
+    if (kill(_pid, SIGTERM) == 0)
+    {
+      waitpid(_pid, &status, 0);
+      bool exited = (WIFSIGNALED(status) || WIFEXITED(status));
+      _running = !exited;
+      return exited;
+    }
+    else
+    {
+      // Failed to kill the instance.
+      perror("kill");
+      return false;
+    }
   }
   else
   {
-    // Failed to kill the instance.
-    perror("kill");
-    return false;
+    return true;
   }
 }
 

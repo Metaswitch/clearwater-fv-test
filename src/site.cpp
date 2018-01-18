@@ -149,57 +149,65 @@ void Site::create_chronos_instances(int count)
 }
 
 
-void Site::start()
+void Site::for_each_instance(std::function<void(std::shared_ptr<ProcessInstance>)> fn)
 {
   for (const std::shared_ptr<MemcachedInstance>& inst : _memcached_instances)
   {
-    inst->start_instance();
+    fn(inst);
   }
 
   for (const std::shared_ptr<RogersInstance>& inst : _rogers_instances)
   {
-    inst->start_instance();
+    fn(inst);
   }
 
   for (const std::shared_ptr<ChronosInstance>& inst : _chronos_instances)
   {
-    inst->start_instance();
+    fn(inst);
   }
-
 }
+
+
+void Site::start()
+{
+  for_each_instance([](std::shared_ptr<ProcessInstance> inst)
+  {
+    inst->start_instance();
+  });
+}
+
+
+void Site::restart()
+{
+  for_each_instance([](std::shared_ptr<ProcessInstance> inst)
+  {
+    inst->restart_instance();
+  });
+}
+
+
+void Site::kill()
+{
+  for_each_instance([](std::shared_ptr<ProcessInstance> inst)
+  {
+    inst->kill_instance();
+  });
+}
+
 
 bool Site::wait_for_instances()
 {
-  TRC_DEBUG("Waiting for instances in %s", _site_name.c_str());
+  bool ok = true;
 
-  for (const std::shared_ptr<MemcachedInstance>& inst : _memcached_instances)
+  for_each_instance([&ok](std::shared_ptr<ProcessInstance> inst)
   {
     if (!inst->wait_for_instance())
     {
-      TRC_ERROR("Memcached instance %s:%d failed to start", inst->ip().c_str(), inst->port());
-      return false;
+      ok = false;
     }
-  }
+  });
 
-  for (const std::shared_ptr<RogersInstance>& inst : _rogers_instances)
-  {
-    if (!inst->wait_for_instance())
-    {
-      TRC_ERROR("Rogers instance %s:%d failed to start", inst->ip().c_str(), inst->port());
-      return false;
-    }
-  }
-
-  for (const std::shared_ptr<ChronosInstance>& inst : _chronos_instances)
-  {
-    if (!inst->wait_for_instance())
-    {
-      TRC_ERROR("Chronos instance %s:%d failed to start", inst->ip().c_str(), inst->port());
-      return false;
-    }
-  }
-
-  return true;
+  return ok;
 }
 
 
