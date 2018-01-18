@@ -12,7 +12,7 @@
 #include "gtest/gtest.h"
 
 #include "processinstance.h"
-#include "db_site.h"
+#include "site.h"
 
 #include "memcachedstore.h"
 #include "astaire_aor_store.h"
@@ -48,7 +48,7 @@ public:
     // need.
     boost::filesystem::create_directory("tmp");
 
-    _site1 = std::shared_ptr<DbSite>(new DbSite(1, "tmp/site1"));
+    _site1 = std::shared_ptr<Site>(new Site(1, "tmp/site1"));
   }
 
   /// TODO
@@ -123,11 +123,11 @@ public:
   /// Use shared pointers for managing the instances so that the memory gets
   /// freed when the vector is cleared.
   static std::shared_ptr<DnsmasqInstance> _dnsmasq_instance;
-  static std::shared_ptr<DbSite> _site1;
+  static std::shared_ptr<Site> _site1;
 };
 
 std::shared_ptr<DnsmasqInstance> BaseS4SolutionTest::_dnsmasq_instance;
-std::shared_ptr<DbSite> BaseS4SolutionTest::_site1;
+std::shared_ptr<Site> BaseS4SolutionTest::_site1;
 
 /// Clear all the memcached and Rogers instances. This calls their
 /// destructors which will kill the underlying processes. Also remove the

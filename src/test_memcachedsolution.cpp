@@ -14,7 +14,7 @@
 
 #include "memcachedstore.h"
 #include "processinstance.h"
-#include "db_site.h"
+#include "site.h"
 
 #include <vector>
 #include <iostream>
@@ -48,7 +48,7 @@ public:
     // need.
     boost::filesystem::create_directory("tmp");
 
-    _dbs = std::shared_ptr<DbSite>(new DbSite(1, "tmp/site1"));
+    _dbs = std::shared_ptr<Site>(new Site(1, "tmp/site1"));
 
     _next_key = std::rand();
   }
@@ -172,7 +172,7 @@ public:
   /// Use shared pointers for managing the instances so that the memory gets
   /// freed when the vector is cleared.
   static std::shared_ptr<DnsmasqInstance> _dnsmasq_instance;
-  static std::shared_ptr<DbSite> _dbs;
+  static std::shared_ptr<Site> _dbs;
 
   /// Tests that use this fixture use a monotonically incrementing numerical key
   /// (so that tests are isolated from each other). This variable stores the
@@ -185,7 +185,7 @@ public:
 };
 
 std::shared_ptr<DnsmasqInstance> BaseMemcachedSolutionTest::_dnsmasq_instance;
-std::shared_ptr<DbSite> BaseMemcachedSolutionTest::_dbs;
+std::shared_ptr<Site> BaseMemcachedSolutionTest::_dbs;
 
 unsigned int BaseMemcachedSolutionTest::_next_key;
 const std::string BaseMemcachedSolutionTest::_table = "test_table";

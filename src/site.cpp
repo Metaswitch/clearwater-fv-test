@@ -1,5 +1,5 @@
 /**
- * @file db_site.cpp Helper class for spinning up all the processes in a
+ * @file site.cpp Helper class for spinning up all the processes in a
  * site.
  *
  * Copyright (C) Metaswitch Networks 2018
@@ -14,21 +14,21 @@
 #include <boost/filesystem.hpp>
 
 #include "processinstance.h"
-#include "db_site.h"
+#include "site.h"
 
 static const int MEMCACHED_PORT = 33333;
 static const int ROGERS_PORT = 11311;
 static const int CHRONOS_PORT = 7253;
 
 
-DbSite::DbSite(int index, const std::string& dir) :
+Site::Site(int index, const std::string& dir) :
   _site_index(index), _site_dir(dir)
 {
   boost::filesystem::create_directory(_site_dir);
 }
 
 
-DbSite::~DbSite()
+Site::~Site()
 {
   _memcached_instances.clear();
   _rogers_instances.clear();
@@ -38,13 +38,13 @@ DbSite::~DbSite()
 }
 
 
-std::string DbSite::site_ip(int index)
+std::string Site::site_ip(int index)
 {
   return "127.0." + std::to_string(_site_index) + "." + std::to_string(index);
 }
 
 
-void DbSite::create_and_start_memcached_instances(int memcached_instances)
+void Site::create_and_start_memcached_instances(int memcached_instances)
 {
   std::ofstream cluster_settings(_site_dir + "/cluster_settings");
 
@@ -71,7 +71,7 @@ void DbSite::create_and_start_memcached_instances(int memcached_instances)
 }
 
 
-void DbSite::create_and_start_rogers_instances(int rogers_instances)
+void Site::create_and_start_rogers_instances(int rogers_instances)
 {
   for (int ii = 0; ii < rogers_instances; ++ii)
   {
@@ -83,7 +83,7 @@ void DbSite::create_and_start_rogers_instances(int rogers_instances)
 }
 
 
-void DbSite::create_and_start_chronos_instances(int chronos_instances)
+void Site::create_and_start_chronos_instances(int chronos_instances)
 {
   // Create directory to hold chronos config and logs.
   std::string chronos_dir = _site_dir + "/chronos";
@@ -112,7 +112,7 @@ void DbSite::create_and_start_chronos_instances(int chronos_instances)
 }
 
 
-bool DbSite::wait_for_instances()
+bool Site::wait_for_instances()
 {
   bool success = true;
 
@@ -150,7 +150,7 @@ bool DbSite::wait_for_instances()
 }
 
 
-std::vector<std::string> DbSite::get_chronos_ips()
+std::vector<std::string> Site::get_chronos_ips()
 {
   std::vector<std::string> ips;
   for (const std::shared_ptr<ChronosInstance> instance : _chronos_instances)
@@ -162,7 +162,7 @@ std::vector<std::string> DbSite::get_chronos_ips()
 }
 
 
-std::vector<std::string> DbSite::get_rogers_ips()
+std::vector<std::string> Site::get_rogers_ips()
 {
   std::vector<std::string> ips;
   for (const std::shared_ptr<RogersInstance> instance : _rogers_instances)
@@ -174,19 +174,19 @@ std::vector<std::string> DbSite::get_rogers_ips()
 }
 
 
-std::shared_ptr<ChronosInstance> DbSite::get_first_chronos()
+std::shared_ptr<ChronosInstance> Site::get_first_chronos()
 {
   return _chronos_instances.back();
 }
 
 
-std::shared_ptr<RogersInstance> DbSite::get_first_rogers()
+std::shared_ptr<RogersInstance> Site::get_first_rogers()
 {
   return _rogers_instances.back();
 }
 
 
-std::shared_ptr<MemcachedInstance> DbSite::get_first_memcached()
+std::shared_ptr<MemcachedInstance> Site::get_first_memcached()
 {
   return _memcached_instances.back();
 }

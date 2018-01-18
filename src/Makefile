@@ -52,7 +52,7 @@ TARGET_SOURCES_TEST := memcachedstore.cpp \
                        test_main.cpp \
                        test_dns.cpp \
                        test_snmp.cpp \
-                       db_site.cpp \
+                       site.cpp \
                        processinstance.cpp \
                        test_interposer.cpp \
                        test_memcachedsolution.cpp \

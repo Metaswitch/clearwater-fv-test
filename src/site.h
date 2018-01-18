@@ -1,5 +1,5 @@
 /**
- * @file db_site.h Helper class for spinning up all the processes in a site.
+ * @file site.h Helper class for spinning up all the processes in a site.
  *
  * Copyright (C) Metaswitch Networks 2018
  * If license terms are provided to you in a COPYING file in the root directory
@@ -9,14 +9,14 @@
  * Metaswitch Networks in a separate written agreement.
  */
 
-#ifndef DB_SITE_H__
-#define DB_SITE_H__
+#ifndef SITE_H__
+#define SITE_H__
 
 #include <string>
 #include <memory>
 #include <vector>
 
-class DbSite
+class Site
 {
 public:
   /// Constructor
@@ -25,8 +25,8 @@ public:
   ///                   unique across all sites.
   /// @param dir [in]   A directory that the site may create and use to store
   ///                   any temporary files it requires.
-  DbSite(int index, const std::string& dir);
-  virtual ~DbSite();
+  Site(int index, const std::string& dir);
+  virtual ~Site();
 
   /// Creates and starts up the specified number of memcached instances.
   ///
