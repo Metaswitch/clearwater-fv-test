@@ -296,9 +296,3 @@ TEST_F(SimpleS4SolutionTest, TracerBullet)
   EXPECT_EQ(status, HTTP_OK);
   EXPECT_NE(aor, nullptr);
 }
-
-
-TEST_F(SimpleS4SolutionTest, Demo)
-{
-  sleep(3600);
-}
