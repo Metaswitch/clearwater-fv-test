@@ -23,6 +23,7 @@ TARGET_SOURCES_TEST := memcachedstore.cpp \
                        memcachedstoreview.cpp \
                        memcached_config.cpp \
                        signalhandler.cpp \
+                       snmp_agent.cpp \
                        snmp_row.cpp \
                        snmp_ip_row.cpp \
                        event_statistic_accumulator.cpp \
