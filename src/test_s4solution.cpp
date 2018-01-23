@@ -24,6 +24,8 @@
 #include <stdio.h>
 #include <thread>
 #include <boost/filesystem.hpp>
+#include <stddef.h>
+#include <signal.h>
 
 SAS::TrailId FAKE_SAS_TRAIL_ID = 0x12345678;
 
@@ -66,6 +68,7 @@ public:
           new TopologyNeutralMemcachedStore(item.second.rogers_domain, _resolver, true));
         _remote_aor_stores.push_back(new AstaireAoRStore(_remote_stores.back()));
         _remote_s4s.push_back(new S4(site_name + "-remote-s4-to-" + item.first,
+                                     "",
                                      _remote_aor_stores.back(),
                                      {}));
       }
@@ -76,7 +79,10 @@ public:
                                                _resolver,
                                                false);
     _aor_store = new AstaireAoRStore(_store);
-    s4 = new S4(site_name + "-local-s4", _aor_store, _remote_s4s);
+    s4 = new S4(site_name + "-local-s4",
+                "/todo/fill/in/callback/URL",
+                _aor_store,
+                _remote_s4s);
   }
 
   /// Destructor.
@@ -246,6 +252,7 @@ void BaseS4SolutionTest::signal_handler(int sig)
 /// Test fixture that sets up 2 Rogerss and 2 memcacheds.
 class SimpleS4SolutionTest : public BaseS4SolutionTest
 {
+public:
   static void SetUpTestCase()
   {
     BaseS4SolutionTest::SetUpTestCase();
@@ -280,7 +287,7 @@ TEST_F(SimpleS4SolutionTest, TracerBullet)
   b->_expires = time(NULL) + 3600;
   aor->_bindings[impu] = b;
 
-  _s4_site1->s4->handle_put(impu, aor, FAKE_SAS_TRAIL_ID);
+  _s4_site1->s4->handle_put(impu, *aor, FAKE_SAS_TRAIL_ID);
 
   // Kill site 1.
   _site1->kill();
