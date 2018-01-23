@@ -80,14 +80,14 @@ public:
   /// Start all processes in the site.
   ///
   /// @warning This does not wait for the instances to come up. This is so that
-  /// multipl sites and/or other processes can be started in parallel. Call
+  /// multiple sites and/or other processes can be started in parallel. Call
   /// wait_for_instances before using the site.
   void start();
 
   /// Restart all processes in the site.
   ///
   /// @warning This does not wait for the instances to come up. This is so that
-  /// multipl sites and/or other processes can be started in parallel. Call
+  /// multiple sites and/or other processes can be started in parallel. Call
   /// wait_for_instances before using the site.
   void restart();
 

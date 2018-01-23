@@ -1,5 +1,5 @@
 /**
- * @file test_s5 FV tests for Clearwater's S4 component.
+ * @file test_s4solution.cpp FV tests for Clearwater's S4 component.
  *
  * Copyright (C) Metaswitch Networks 2018
  * If license terms are provided to you in a COPYING file in the root directory
@@ -249,7 +249,7 @@ void BaseS4SolutionTest::signal_handler(int sig)
 ///
 ////////////////////////////////////////////////////////////////////////////////
 
-/// Test fixture that sets up 2 Rogerss and 2 memcacheds.
+/// Test fixture that sets up 2 Rogers and 2 memcacheds.
 class SimpleS4SolutionTest : public BaseS4SolutionTest
 {
 public:
