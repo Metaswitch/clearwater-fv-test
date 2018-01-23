@@ -17,7 +17,7 @@
 class ProcessInstance
 {
 public:
-  ProcessInstance(std::string ip, int port) : _ip(ip), _port(port) {};
+  ProcessInstance(std::string ip, int port) : _ip(ip), _port(port), _running(false) {};
   ProcessInstance(int port) : ProcessInstance("127.0.0.1", port) {};
   virtual ~ProcessInstance() { kill_instance(); }
 
@@ -35,20 +35,27 @@ private:
   std::string _ip;
   int _port;
   int _pid;
+  bool _running;
 };
 
 class MemcachedInstance : public ProcessInstance
 {
 public:
-  MemcachedInstance(int port) : ProcessInstance(port) {};
+  MemcachedInstance(const std::string& ip, int port) : ProcessInstance(ip, port) {};
   virtual bool execute_process();
 };
 
 class RogersInstance : public ProcessInstance
 {
 public:
-  RogersInstance(const std::string& ip, int port) : ProcessInstance(ip, port) {};
+  RogersInstance(const std::string& ip, int port, const std::string& cluster_settings_file) :
+    ProcessInstance(ip, port),
+    _cluster_settings_file(cluster_settings_file)
+  {};
   virtual bool execute_process();
+
+private:
+  std::string _cluster_settings_file;
 };
 
 class DnsmasqInstance : public ProcessInstance
@@ -62,4 +69,24 @@ public:
 private:
   void write_config(std::map<std::string, std::vector<std::string>> a_records);
   std::string _cfgfile;
+};
+
+class ChronosInstance : public ProcessInstance
+{
+public:
+  ChronosInstance(const std::string& ip,
+                  int port,
+                  const std::string& instance_dir,
+                  const std::string& cluster_conf_file,
+                  const std::string& shared_conf_file);
+  virtual ~ChronosInstance();
+  bool execute_process();
+
+private:
+  std::string _instance_dir;
+  std::string _log_dir;
+  std::string _conf_dir;
+  std::string _local_conf_file;
+  std::string _cluster_conf_file;
+  std::string _shared_conf_file;
 };
