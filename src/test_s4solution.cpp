@@ -288,6 +288,7 @@ TEST_F(SimpleS4SolutionTest, TracerBullet)
   aor->_bindings[impu] = b;
 
   _s4_site1->s4->handle_put(impu, *aor, FAKE_SAS_TRAIL_ID);
+  delete aor; aor = nullptr;
 
   // Kill site 1.
   _site1->kill();
@@ -302,4 +303,5 @@ TEST_F(SimpleS4SolutionTest, TracerBullet)
                                               FAKE_SAS_TRAIL_ID);
   EXPECT_EQ(status, HTTP_OK);
   EXPECT_NE(aor, nullptr);
+  delete aor; aor = nullptr;
 }
