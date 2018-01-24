@@ -120,7 +120,7 @@ private:
   std::vector<S4*> _remote_s4s;
 };
 
-/// Fixture for all memcached solution tests.
+/// Fixture for all S4 solution tests.
 class BaseS4SolutionTest : public ::testing::Test
 {
 public:
