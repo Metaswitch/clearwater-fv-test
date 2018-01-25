@@ -55,9 +55,12 @@ public:
   /// @param [in] deployment_topology - The topology of the entire deployment.
   S4Site(const std::string& site_name, std::map<std::string, Site::Topology> deployment_topology)
   {
-    // Create a DNS server and resolver.
+    // Create a DNS server, http_resolver and astaire_resolver.
     _dns_client = new DnsCachedResolver("127.0.0.1", 5353);
-    _resolver = new AstaireResolver(_dns_client, AF_INET);
+    _http_resolver = new HttpResolver(_dns_client,
+                                      AF_INET,
+                                      HttpResolver::DEFAULT_BLACKLIST_DURATION);
+    _astaire_resolver = new AstaireResolver(_dns_client, AF_INET);
 
     // Work out what our local IP address should be.
     std::string ip_addr = deployment_topology.at(site_name).ip_addr_prefix + "1";
@@ -69,26 +72,29 @@ public:
       {
         _remote_stores.push_back(
           new TopologyNeutralMemcachedStore(item.second.rogers_domain,
-                                            _resolver,
+                                            _astaire_resolver,
                                             true,
                                             nullptr,
                                             ip_addr));
         _remote_aor_stores.push_back(new AstaireAoRStore(_remote_stores.back()));
         _remote_s4s.push_back(new S4(site_name + "-remote-s4-to-" + item.first,
-                                     "",
-                                     _remote_aor_stores.back(),
-                                     {}));
+                                     _remote_aor_stores.back()));
       }
     }
 
     // Now create the local S4 and associated stores.
     _store = new TopologyNeutralMemcachedStore(deployment_topology.at(site_name).rogers_domain,
-                                               _resolver,
+                                               _astaire_resolver,
                                                false,
                                                nullptr,
                                                ip_addr);
     _aor_store = new AstaireAoRStore(_store);
+    _chronos_connection = new ChronosConnection("chronos." + site_name,
+                                                "127.0.0.1:9888", // TODO: Add HTTPStack
+                                                _http_resolver,
+                                                NULL);
     s4 = new S4(site_name + "-local-s4",
+                _chronos_connection,
                 "/todo/fill/in/callback/URL",
                 _aor_store,
                 _remote_s4s);
@@ -102,18 +108,22 @@ public:
     for (AoRStore* s : _remote_aor_stores) { delete s; }
     for (S4* s : _remote_s4s) { delete s; }
     delete s4; s4 = NULL;
+    delete _chronos_connection; _chronos_connection = NULL;
     delete _aor_store; _aor_store = NULL;
     delete _store; _store = NULL;
-    delete _resolver; _resolver = NULL;
+    delete _astaire_resolver; _astaire_resolver = NULL;
+    delete _http_resolver; _http_resolver = NULL;
     delete _dns_client; _dns_client = NULL;
   }
 
 private:
-  AstaireResolver* _resolver;
+  HttpResolver* _http_resolver;
+  AstaireResolver* _astaire_resolver;
   DnsCachedResolver* _dns_client;
 
   TopologyNeutralMemcachedStore* _store;
   AoRStore* _aor_store;
+  ChronosConnection* _chronos_connection;
 
   std::vector<TopologyNeutralMemcachedStore*> _remote_stores;
   std::vector<AoRStore*> _remote_aor_stores;

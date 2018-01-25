@@ -18,6 +18,11 @@ TARGET_TEST := fvtest
 TARGET_SOURCES_TEST := memcachedstore.cpp \
                        baseresolver.cpp \
                        astaire_resolver.cpp \
+                       a_record_resolver.cpp \
+                       httpconnection.cpp \
+                       http_connection_pool.cpp \
+                       httpclient.cpp \
+                       chronosconnection.cpp \
                        utils.cpp \
                        memcached_connection_pool.cpp \
                        memcachedstoreview.cpp \
@@ -109,6 +114,8 @@ LDFLAGS += -lmemcached \
            -ldl \
            -lrt \
            -lcares \
+           -lcurl \
+           -lz \
            -lboost_regex \
            -lboost_filesystem \
            -lboost_system \
