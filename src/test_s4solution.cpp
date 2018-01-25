@@ -65,7 +65,11 @@ public:
       if (item.first != site_name)
       {
         _remote_stores.push_back(
-          new TopologyNeutralMemcachedStore(item.second.rogers_domain, _resolver, true));
+          new TopologyNeutralMemcachedStore(item.second.rogers_domain,
+                                            _resolver,
+                                            true,
+                                            nullptr,
+                                            "127.0.0.101"));
         _remote_aor_stores.push_back(new AstaireAoRStore(_remote_stores.back()));
         _remote_s4s.push_back(new S4(site_name + "-remote-s4-to-" + item.first,
                                      "",
@@ -77,7 +81,9 @@ public:
     // Now create the local S4 and associated stores.
     _store = new TopologyNeutralMemcachedStore(deployment_topology[site_name].rogers_domain,
                                                _resolver,
-                                               false);
+                                               false,
+                                               nullptr,
+                                               "127.0.0.100");
     _aor_store = new AstaireAoRStore(_store);
     s4 = new S4(site_name + "-local-s4",
                 "/todo/fill/in/callback/URL",
