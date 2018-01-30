@@ -44,7 +44,7 @@ class S4Site
 {
 public:
   /// The local S4 instance. This is the one and only S4 that the tests should
-  /// access, so it is a public members (while the other S4 instances are
+  /// access, so it is a public member (while the other S4 instances are
   /// private).
   S4* s4;
 
@@ -59,6 +59,9 @@ public:
     _dns_client = new DnsCachedResolver("127.0.0.1", 5353);
     _resolver = new AstaireResolver(_dns_client, AF_INET);
 
+    // Work out what our local IP address should be.
+    std::string ip_addr = deployment_topology.at(site_name).ip_addr_prefix + "1";
+
     // Create all the remote S4s with their associated stores.
     for (const std::pair<std::string, Site::Topology>& item: deployment_topology)
     {
@@ -69,7 +72,7 @@ public:
                                             _resolver,
                                             true,
                                             nullptr,
-                                            "127.0.0.101"));
+                                            ip_addr));
         _remote_aor_stores.push_back(new AstaireAoRStore(_remote_stores.back()));
         _remote_s4s.push_back(new S4(site_name + "-remote-s4-to-" + item.first,
                                      "",
@@ -79,11 +82,11 @@ public:
     }
 
     // Now create the local S4 and associated stores.
-    _store = new TopologyNeutralMemcachedStore(deployment_topology[site_name].rogers_domain,
+    _store = new TopologyNeutralMemcachedStore(deployment_topology.at(site_name).rogers_domain,
                                                _resolver,
                                                false,
                                                nullptr,
-                                               "127.0.0.100");
+                                                ip_addr);
     _aor_store = new AstaireAoRStore(_store);
     s4 = new S4(site_name + "-local-s4",
                 "/todo/fill/in/callback/URL",
@@ -132,11 +135,14 @@ public:
     // need.
     boost::filesystem::create_directory("tmp");
 
-    _deployment_topology["site1"] =
-      Site::Topology().with_chronos("chronos.site1").with_rogers("rogers.site1");
-    _deployment_topology["site2"] =
-      Site::Topology().with_chronos("chronos.site2").with_rogers("rogers.site2");
-
+    _deployment_topology.emplace("site1",
+                                 Site::Topology("127.0.1.")
+                                  .with_chronos("chronos.site1")
+                                  .with_rogers("rogers.site1"));
+    _deployment_topology.emplace("site2",
+                                 Site::Topology("127.0.2.")
+                                  .with_chronos("chronos.site2")
+                                  .with_rogers("rogers.site2"));
   }
 
   static void TearDownTestCase()
@@ -268,10 +274,10 @@ public:
     // Generate the DNS records for rogers and chronos, and start dnsmasq to
     // serve these.
     std::map<std::string, std::vector<std::string>> a_records;
-    a_records[_deployment_topology["site1"].rogers_domain] = _site1->get_rogers_ips();
-    a_records[_deployment_topology["site1"].chronos_domain] = _site1->get_chronos_ips();
-    a_records[_deployment_topology["site2"].rogers_domain] = _site2->get_rogers_ips();
-    a_records[_deployment_topology["site2"].chronos_domain] = _site2->get_chronos_ips();
+    a_records[_deployment_topology.at("site1").rogers_domain] = _site1->get_rogers_ips();
+    a_records[_deployment_topology.at("site1").chronos_domain] = _site1->get_chronos_ips();
+    a_records[_deployment_topology.at("site2").rogers_domain] = _site2->get_rogers_ips();
+    a_records[_deployment_topology.at("site2").chronos_domain] = _site2->get_chronos_ips();
 
     create_and_start_dns(a_records);
   }
