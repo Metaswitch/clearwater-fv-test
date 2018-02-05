@@ -86,7 +86,7 @@ public:
                                                _resolver,
                                                false,
                                                nullptr,
-                                                ip_addr);
+                                               ip_addr);
     _aor_store = new AstaireAoRStore(_store);
     s4 = new S4(site_name + "-local-s4",
                 "/todo/fill/in/callback/URL",
