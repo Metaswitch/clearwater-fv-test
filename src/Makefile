@@ -78,6 +78,7 @@ EXTRA_CLEANS += $(TEST_XML) \
 CPPFLAGS += -Wno-write-strings \
             -ggdb3 -std=c++0x
 CPPFLAGS += -I${ROOT}/include \
+            -I${ROOT}/usr/include \
             -I${ASTAIRE_INCLUDES} \
             -I${ROOT}/modules/cpp-common/include \
             -I${ROOT}/modules/clearwater-s4/include \
