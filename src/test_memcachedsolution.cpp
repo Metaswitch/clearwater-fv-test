@@ -98,10 +98,11 @@ public:
 
   static void create_and_start_databases(int num_memcacheds, int num_rogers)
   {
+    Site::Topology tplg("127.0.1.");
     _dbs = std::shared_ptr<Site>(new Site(1,
                                           "site1",
                                           "tmp/site1",
-                                          {},
+                                          {{"site1", tplg}},
                                           num_memcacheds,
                                           num_rogers));
     _dbs->start();
@@ -320,8 +321,7 @@ class SimpleMemcachedSolutionTest : public BaseMemcachedSolutionTest
   {
     BaseMemcachedSolutionTest::SetUpTestCase();
 
-    _dbs = std::shared_ptr<Site>(new Site(1, "site1", "tmp/site1", {}, 2, 2));
-    _dbs->start();
+    create_and_start_databases(2, 2);
     create_and_start_dns();
   }
 };

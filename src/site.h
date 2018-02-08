@@ -23,8 +23,15 @@ public:
   /// what services are present and what domain names they are accessible at.
   struct Topology
   {
+    std::string ip_addr_prefix;
     std::string chronos_domain;
     std::string rogers_domain;
+
+    /// Constructor.
+    ///
+    /// @param [in] ip_addr_prefix - The first three octets of the site's IP
+    /// address range, in the form "x.y.z.".
+    Topology(const std::string& ip_addr_prefix);
 
     /// Set the chronos domain name.
     ///
@@ -130,6 +137,10 @@ private:
 
   /// Directory this site may use for storing config files, log files, etc.
   std::string _site_dir;
+
+  /// IP address prefix of this site, in the form "x.y.z.". Note the trailing
+  /// dot.
+  std::string _ip_addr_prefix;
 
   /// The topology of all the sites in the deployment.
   std::map<std::string, Topology> _deployment_topology;

@@ -33,6 +33,7 @@ Site::Site(int index,
   _site_index(index),
   _site_name(name),
   _site_dir(dir),
+  _ip_addr_prefix(deployment_topology.at(name).ip_addr_prefix),
   _deployment_topology(deployment_topology)
 {
   boost::filesystem::create_directory(_site_dir);
@@ -54,7 +55,7 @@ Site::~Site()
 
 std::string Site::site_ip(int index)
 {
-  return "127.0." + std::to_string(_site_index) + "." + std::to_string(index);
+  return _ip_addr_prefix + std::to_string(index);
 }
 
 
@@ -254,6 +255,12 @@ std::shared_ptr<RogersInstance> Site::get_first_rogers()
 std::shared_ptr<MemcachedInstance> Site::get_first_memcached()
 {
   return _memcached_instances.back();
+}
+
+
+Site::Topology::Topology(const std::string& ip_addr_prefix_arg) :
+  ip_addr_prefix(ip_addr_prefix_arg)
+{
 }
 
 
