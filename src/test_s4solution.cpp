@@ -14,6 +14,7 @@
 #include "processinstance.h"
 #include "site.h"
 
+#include "httpstack.h"
 #include "memcachedstore.h"
 #include "astaire_aor_store.h"
 #include "s4.h"
@@ -63,7 +64,8 @@ public:
     _astaire_resolver = new AstaireResolver(_dns_client, AF_INET);
 
     // Work out what our local IP address should be.
-    std::string ip_addr = deployment_topology.at(site_name).ip_addr_prefix + "1";
+    Site::Topology& this_site = deployment_topology.at(site_name);
+    std::string ip_addr = this_site.ip_addr_prefix + "1";
 
     // Create all the remote S4s with their associated stores.
     for (const std::pair<std::string, Site::Topology>& item: deployment_topology)
@@ -82,20 +84,38 @@ public:
       }
     }
 
+    try
+    {
+      // Create an HTTP stack with no exception handler. This means the tests
+      // will crash if they ever hit a signal, but this is probably what we want
+      // anyway.
+      _http_stack = new HttpStack(1, nullptr);
+      _http_stack->initialize();
+      //_http_stack->register_handler(...);
+      _http_stack->bind_tcp_socket(ip_addr, 8080);
+      _http_stack->start(nullptr);
+      _http_stack->initialize();
+    }
+    catch (HttpStack::Exception& e)
+    {
+      EXPECT_TRUE(false);
+      exit(42);
+    }
+
     // Now create the local S4 and associated stores.
-    _store = new TopologyNeutralMemcachedStore(deployment_topology.at(site_name).rogers_domain,
+    _store = new TopologyNeutralMemcachedStore(this_site.rogers_domain,
                                                _astaire_resolver,
                                                false,
                                                nullptr,
                                                ip_addr);
     _aor_store = new AstaireAoRStore(_store);
-    _chronos_connection = new ChronosConnection("chronos." + site_name,
-                                                "127.0.0.1:9888", // TODO: Add HTTPStack
+    _chronos_connection = new ChronosConnection(this_site.chronos_domain,
+                                                ip_addr + ":8080",
                                                 _http_resolver,
-                                                NULL);
+                                                nullptr);
     s4 = new S4(site_name + "-local-s4",
                 _chronos_connection,
-                "/todo/fill/in/callback/URL",
+                "/timers",
                 _aor_store,
                 _remote_s4s);
   }
@@ -107,13 +127,14 @@ public:
     for (TopologyNeutralMemcachedStore* s : _remote_stores) { delete s; }
     for (AoRStore* s : _remote_aor_stores) { delete s; }
     for (S4* s : _remote_s4s) { delete s; }
-    delete s4; s4 = NULL;
-    delete _chronos_connection; _chronos_connection = NULL;
-    delete _aor_store; _aor_store = NULL;
-    delete _store; _store = NULL;
-    delete _astaire_resolver; _astaire_resolver = NULL;
-    delete _http_resolver; _http_resolver = NULL;
-    delete _dns_client; _dns_client = NULL;
+    delete s4; s4 = nullptr;
+    delete _chronos_connection; _chronos_connection = nullptr;
+    delete _aor_store; _aor_store = nullptr;
+    delete _store; _store = nullptr;
+    delete _astaire_resolver; _astaire_resolver = nullptr;
+    delete _http_resolver; _http_resolver = nullptr;
+    delete _dns_client; _dns_client = nullptr;
+    delete _http_stack; _http_stack = nullptr;
   }
 
 private:
@@ -124,6 +145,7 @@ private:
   TopologyNeutralMemcachedStore* _store;
   AoRStore* _aor_store;
   ChronosConnection* _chronos_connection;
+  HttpStack* _http_stack;
 
   std::vector<TopologyNeutralMemcachedStore*> _remote_stores;
   std::vector<AoRStore*> _remote_aor_stores;
@@ -178,8 +200,8 @@ public:
 
   virtual void TearDown()
   {
-    delete _s4_site1; _s4_site1 = NULL;
-    delete _s4_site2; _s4_site2 = NULL;
+    delete _s4_site1; _s4_site1 = nullptr;
+    delete _s4_site2; _s4_site2 = nullptr;
   }
 
   static void create_and_start_sites()
@@ -306,7 +328,7 @@ TEST_F(SimpleS4SolutionTest, TracerBullet)
   // PUT a binding to site 1.
   AoR* aor = new AoR(impu);
   Binding* b = new Binding(impu);
-  b->_expires = time(NULL) + 3600;
+  b->_expires = time(nullptr) + 3600;
   aor->_bindings[impu] = b;
 
   _s4_site1->s4->handle_put(impu, *aor, FAKE_SAS_TRAIL_ID);
