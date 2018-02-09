@@ -26,6 +26,8 @@ public:
     std::string ip_addr_prefix;
     std::string chronos_domain;
     std::string rogers_domain;
+    std::string dns_ip;
+    int dns_port;
 
     /// Constructor.
     ///

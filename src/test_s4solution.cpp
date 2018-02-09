@@ -15,9 +15,12 @@
 #include "site.h"
 
 #include "httpstack.h"
+#include "httpstack_utils.h"
 #include "memcachedstore.h"
 #include "astaire_aor_store.h"
 #include "s4.h"
+#include "s4_chronoshandlers.h"
+#include "mock_timer_pop_consumer.h"
 
 #include <vector>
 #include <iostream>
@@ -29,6 +32,9 @@
 #include <signal.h>
 
 SAS::TrailId FAKE_SAS_TRAIL_ID = 0x12345678;
+
+using ::testing::_;
+using ::testing::StrictMock;
 
 /// Class containing everything needed for an "S4-site".
 ///
@@ -49,6 +55,9 @@ public:
   /// private).
   S4* s4;
 
+  /// A mock object that receives timer pops from S4.
+  StrictMock<MockTimerPopConsumer> timer_sink;
+
   /// Constructor
   ///
   /// @param [in] site_name           - The name of the local database site that
@@ -57,7 +66,10 @@ public:
   S4Site(const std::string& site_name, std::map<std::string, Site::Topology> deployment_topology)
   {
     // Create a DNS server, http_resolver and astaire_resolver.
-    _dns_client = new DnsCachedResolver("127.0.0.1", 5353);
+    _dns_client = new DnsCachedResolver("127.0.0.1",
+                                        DnsCachedResolver::DEFAULT_TIMEOUT,
+                                        DnsCachedResolver::NO_DNS_FILE,
+                                        5353);
     _http_resolver = new HttpResolver(_dns_client,
                                       AF_INET,
                                       HttpResolver::DEFAULT_BLACKLIST_DURATION);
@@ -84,24 +96,6 @@ public:
       }
     }
 
-    try
-    {
-      // Create an HTTP stack with no exception handler. This means the tests
-      // will crash if they ever hit a signal, but this is probably what we want
-      // anyway.
-      _http_stack = new HttpStack(1, nullptr);
-      _http_stack->initialize();
-      //_http_stack->register_handler(...);
-      _http_stack->bind_tcp_socket(ip_addr, 8080);
-      _http_stack->start(nullptr);
-      _http_stack->initialize();
-    }
-    catch (HttpStack::Exception& e)
-    {
-      EXPECT_TRUE(false);
-      exit(42);
-    }
-
     // Now create the local S4 and associated stores.
     _store = new TopologyNeutralMemcachedStore(this_site.rogers_domain,
                                                _astaire_resolver,
@@ -109,15 +103,43 @@ public:
                                                nullptr,
                                                ip_addr);
     _aor_store = new AstaireAoRStore(_store);
-    _chronos_connection = new ChronosConnection(this_site.chronos_domain,
+    _chronos_connection = new ChronosConnection(this_site.chronos_domain + ":7253",
                                                 ip_addr + ":8080",
                                                 _http_resolver,
-                                                nullptr);
+                                                nullptr,
+                                                ip_addr);
     s4 = new S4(site_name + "-local-s4",
                 _chronos_connection,
                 "/timers",
                 _aor_store,
                 _remote_s4s);
+
+    try
+    {
+      // Create an HTTP stack with no exception handler. This means the tests
+      // will crash if they ever hit a signal, but this is probably what we want
+      // anyway.
+      _http_stack = new HttpStack(1, nullptr);
+      _http_stack->initialize();
+
+      // Register a handler to bind S4 to the HTTP stack.
+      _s4_handler_config = new ChronosAoRTimeoutTask::Config(s4);
+      _s4_handler = new HttpStackUtils::SpawningHandler<
+        ChronosAoRTimeoutTask, ChronosAoRTimeoutTask::Config>(_s4_handler_config);
+      _http_stack->register_handler("^/timers$", _s4_handler);
+
+      _http_stack->bind_tcp_socket(ip_addr, 8080);
+      _http_stack->start(nullptr);
+      _http_stack->initialize();
+    }
+    catch (HttpStack::Exception& e)
+    {
+      EXPECT_TRUE(false);
+      exit(1);
+    }
+
+    // Register S4 with the timer sink.
+    s4->register_timer_pop_consumer(&timer_sink);
   }
 
   /// Destructor.
@@ -134,7 +156,21 @@ public:
     delete _astaire_resolver; _astaire_resolver = nullptr;
     delete _http_resolver; _http_resolver = nullptr;
     delete _dns_client; _dns_client = nullptr;
-    delete _http_stack; _http_stack = nullptr;
+
+    try
+    {
+      _http_stack->stop();
+      _http_stack->wait_stopped();
+      delete _http_stack; _http_stack = nullptr;
+    }
+    catch (HttpStack::Exception& e)
+    {
+      EXPECT_TRUE(false);
+      exit(2);
+    }
+
+    delete _s4_handler; _s4_handler = nullptr;
+    delete _s4_handler_config; _s4_handler_config = nullptr;
   }
 
 private:
@@ -146,6 +182,9 @@ private:
   AoRStore* _aor_store;
   ChronosConnection* _chronos_connection;
   HttpStack* _http_stack;
+  HttpStackUtils::SpawningHandler<
+    ChronosAoRTimeoutTask, ChronosAoRTimeoutTask::Config>* _s4_handler;
+  ChronosAoRTimeoutTask::Config* _s4_handler_config;
 
   std::vector<TopologyNeutralMemcachedStore*> _remote_stores;
   std::vector<AoRStore*> _remote_aor_stores;
@@ -320,6 +359,27 @@ public:
   }
 };
 
+/// Add a key let it time out.
+TEST_F(SimpleS4SolutionTest, TimerTracerBullet)
+{
+  const std::string impu = "sip:kermit@muppets.com";
+
+  // PUT a binding to site 1.
+  AoR* aor = new AoR(impu);
+  Binding* b = new Binding(impu);
+  b->_expires = time(nullptr) + 3;
+  aor->_bindings[impu] = b;
+
+  _s4_site1->s4->handle_put(impu, *aor, FAKE_SAS_TRAIL_ID);
+  delete aor; aor = nullptr;
+
+  EXPECT_CALL(_s4_site1->timer_sink, handle_timer_pop(impu, _));
+  sleep(5);
+
+  printf("Test complete\n");
+  sleep(3600);
+}
+
 /// Add a key and retrieve it.
 TEST_F(SimpleS4SolutionTest, TracerBullet)
 {
@@ -349,3 +409,4 @@ TEST_F(SimpleS4SolutionTest, TracerBullet)
   EXPECT_NE(aor, nullptr);
   delete aor; aor = nullptr;
 }
+

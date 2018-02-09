@@ -71,7 +71,10 @@ public:
   /// previous test, and the new test will assume this.
   virtual void SetUp()
   {
-    _dns_client = new DnsCachedResolver("127.0.0.1", 5353);
+    _dns_client = new DnsCachedResolver("127.0.0.1",
+                                        DnsCachedResolver::DEFAULT_TIMEOUT,
+                                        DnsCachedResolver::NO_DNS_FILE,
+                                        5353);
     _resolver = new AstaireResolver(_dns_client, AF_INET);
     _store = new TopologyNeutralMemcachedStore("rogers.local", _resolver, true);
 

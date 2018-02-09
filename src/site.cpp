@@ -137,6 +137,8 @@ void Site::create_chronos_instances(int count)
   cluster_conf.open(cluster_conf_file);
   cluster_conf << "[cluster]\n";
 
+  Site::Topology& this_site = _deployment_topology.at(_site_name);
+
   for (int ii = 0; ii < count; ++ii)
   {
     std::string ip = site_ip(ii + 1);
@@ -147,7 +149,9 @@ void Site::create_chronos_instances(int count)
                                                         CHRONOS_PORT,
                                                         dir,
                                                         cluster_conf_file,
-                                                        shared_conf_file));
+                                                        shared_conf_file,
+                                                        this_site.dns_ip,
+                                                        this_site.dns_port));
   }
 
   cluster_conf.close();
@@ -259,7 +263,9 @@ std::shared_ptr<MemcachedInstance> Site::get_first_memcached()
 
 
 Site::Topology::Topology(const std::string& ip_addr_prefix_arg) :
-  ip_addr_prefix(ip_addr_prefix_arg)
+  ip_addr_prefix(ip_addr_prefix_arg),
+  dns_ip("127.0.0.1"),
+  dns_port(5353)
 {
 }
 
