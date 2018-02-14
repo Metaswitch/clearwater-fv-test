@@ -104,7 +104,7 @@ public:
                                                ip_addr);
     _aor_store = new AstaireAoRStore(_store);
     _chronos_connection = new ChronosConnection(this_site.chronos_domain + ":7253",
-                                                ip_addr + ":8080",
+                                                ip_addr + ":8088",
                                                 _http_resolver,
                                                 nullptr,
                                                 ip_addr);
@@ -128,7 +128,7 @@ public:
         ChronosAoRTimeoutTask, ChronosAoRTimeoutTask::Config>(_s4_handler_config);
       _http_stack->register_handler("^/timers$", _s4_handler);
 
-      _http_stack->bind_tcp_socket(ip_addr, 8080);
+      _http_stack->bind_tcp_socket(ip_addr, 8088);
       _http_stack->start(nullptr);
       _http_stack->initialize();
     }
