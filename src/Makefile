@@ -112,7 +112,7 @@ CPPFLAGS_TEST  += -DUNIT_TEST \
                   -I$(GTEST_DIR)/include -I$(GMOCK_DIR)/include \
                   -I${ROOT}/modules/cpp-common/test_utils
 
-LDFLAGS += -L${ASTAIRE_LIBS} -L../usr/lib
+LDFLAGS += -L${ASTAIRE_LIBS} -L${ROOT}/usr/lib
 LDFLAGS += -lmemcached \
            -levhtp \
            -levent \

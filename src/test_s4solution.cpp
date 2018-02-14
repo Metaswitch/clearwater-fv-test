@@ -375,9 +375,6 @@ TEST_F(SimpleS4SolutionTest, TimerTracerBullet)
 
   EXPECT_CALL(_s4_site1->timer_sink, handle_timer_pop(impu, _));
   sleep(5);
-
-  printf("Test complete\n");
-  sleep(3600);
 }
 
 /// Add a key and retrieve it.

@@ -4,3 +4,4 @@ fvtest-snmpd.out
 
 src/127.0.0.1_5353__dnsmasq.cfg
 src/cluster_settings
+src/tmp/
