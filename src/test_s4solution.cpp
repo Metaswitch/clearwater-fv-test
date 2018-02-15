@@ -149,18 +149,11 @@ public:
   /// Destructor.
   virtual ~S4Site()
   {
-    // Free everything off.
-    for (TopologyNeutralMemcachedStore* s : _remote_stores) { delete s; }
-    for (AoRStore* s : _remote_aor_stores) { delete s; }
-    for (S4* s : _remote_s4s) { delete s; }
-    delete s4; s4 = nullptr;
-    delete _chronos_connection; _chronos_connection = nullptr;
-    delete _aor_store; _aor_store = nullptr;
-    delete _store; _store = nullptr;
-    delete _astaire_resolver; _astaire_resolver = nullptr;
-    delete _http_resolver; _http_resolver = nullptr;
-    delete _dns_client; _dns_client = nullptr;
-
+    // We need to stop the HTTP stack first. This is so that the transport
+    // thread exits and frees off its thread local data (TLD). If we destroy our
+    // other objects first (like the DNS client), the member variable that
+    // manages all the TLD instances gets freed off first, which means that TLDs
+    // in other threads are not freed.
     try
     {
       _http_stack->stop();
@@ -173,6 +166,17 @@ public:
       exit(2);
     }
 
+    // Free everything off.
+    for (TopologyNeutralMemcachedStore* s : _remote_stores) { delete s; }
+    for (AoRStore* s : _remote_aor_stores) { delete s; }
+    for (S4* s : _remote_s4s) { delete s; }
+    delete s4; s4 = nullptr;
+    delete _chronos_connection; _chronos_connection = nullptr;
+    delete _aor_store; _aor_store = nullptr;
+    delete _store; _store = nullptr;
+    delete _astaire_resolver; _astaire_resolver = nullptr;
+    delete _http_resolver; _http_resolver = nullptr;
+    delete _dns_client; _dns_client = nullptr;
     delete _s4_handler; _s4_handler = nullptr;
     delete _s4_handler_config; _s4_handler_config = nullptr;
   }
