@@ -38,6 +38,7 @@ using ::testing::StrictMock;
 using ::testing::InvokeWithoutArgs;
 using ::testing::DoAll;
 using ::testing::AtLeast;
+using ::testing::Return;
 
 /// Class containing everything needed for an "S4-site".
 ///
@@ -389,7 +390,8 @@ TEST_F(SimpleS4SolutionTest, TimerTracerBullet)
          }),
          InvokeWithoutArgs([&](){
            _s4_site1->s4->handle_delete(impu, cas, FAKE_SAS_TRAIL_ID);
-         })));
+         })))
+    .WillRepeatedly(Return());
 
   // Wait for the binding to expire.
   sleep(5);
