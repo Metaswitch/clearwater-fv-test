@@ -16,6 +16,7 @@
 #include <memory>
 #include <vector>
 
+/// Class controlling the processes running in a site.
 class Site
 {
 public:
@@ -33,6 +34,15 @@ public:
     ///
     /// @param [in] ip_addr_prefix - The first three octets of the site's IP
     /// address range, in the form "x.y.z.".
+    ///
+    /// Each site is given an IPv4 /24 address range to use. All processes
+    /// created in the site will listen on addresses in that subnet. This is
+    /// useful for two reasons:
+    ///   -  It makes IP address management easier, since the IP addresses used
+    ///      by different sites cannot clash.
+    ///   -  It makes it possible to simulate adverse network condition between
+    ///      the sites, by using IP tables rules to modify the traffic between
+    ///      IP addresses in different address ranges.
     Topology(const std::string& ip_addr_prefix);
 
     /// Set the chronos domain name.
