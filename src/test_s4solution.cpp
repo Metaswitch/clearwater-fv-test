@@ -35,6 +35,9 @@ SAS::TrailId FAKE_SAS_TRAIL_ID = 0x12345678;
 
 using ::testing::_;
 using ::testing::StrictMock;
+using ::testing::InvokeWithoutArgs;
+using ::testing::DoAll;
+using ::testing::AtLeast;
 
 /// Class containing everything needed for an "S4-site".
 ///
@@ -373,8 +376,29 @@ TEST_F(SimpleS4SolutionTest, TimerTracerBullet)
   _s4_site1->s4->handle_put(impu, *aor, FAKE_SAS_TRAIL_ID);
   delete aor; aor = nullptr;
 
-  EXPECT_CALL(_s4_site1->timer_sink, handle_timer_pop(impu, _));
+  // Prepare to handle the timer pop. We don't just want to let the data expire
+  // in memcached since S4 adds some time to the expiry time of the records it
+  // writes and we don't want to have to sleep at the end of our test.
+  uint64_t cas;
+  EXPECT_CALL(_s4_site1->timer_sink, handle_timer_pop(impu, _))
+    .Times(AtLeast(1))  /// @todo figure out why the mock is called more than once under valgrind.
+    .WillOnce(
+       DoAll(
+         InvokeWithoutArgs([&](){
+           _s4_site1->s4->handle_get(impu, &aor, cas, FAKE_SAS_TRAIL_ID);
+         }),
+         InvokeWithoutArgs([&](){
+           _s4_site1->s4->handle_delete(impu, cas, FAKE_SAS_TRAIL_ID);
+         })));
+
+  // Wait for the binding to expire.
   sleep(5);
+  delete aor; aor = nullptr;
+
+  // Check that the binding has actually gone.
+  HTTPCode status = _s4_site2->s4->handle_get(impu, &aor, cas, FAKE_SAS_TRAIL_ID);
+  EXPECT_EQ(status, HTTP_NOT_FOUND);
+  EXPECT_EQ(aor, nullptr);
 }
 
 /// Add a key and retrieve it.
@@ -398,7 +422,7 @@ TEST_F(SimpleS4SolutionTest, TracerBullet)
   // Get from site 2. This should work as S4 has replicated the PUT to the
   // remote site.
   uint64_t cas;
-  HTTPCode status = _s4_site2->s4->handle_get("sip:kermit@muppets.com",
+  HTTPCode status = _s4_site2->s4->handle_get(impu,
                                               &aor,
                                               cas,
                                               FAKE_SAS_TRAIL_ID);
