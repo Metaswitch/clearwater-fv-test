@@ -21,6 +21,7 @@
 #include "s4.h"
 #include "s4_chronoshandlers.h"
 #include "mock_timer_pop_consumer.h"
+#include "aor_test_utils.h"
 
 #include <vector>
 #include <iostream>
@@ -30,6 +31,7 @@
 #include <boost/filesystem.hpp>
 #include <stddef.h>
 #include <signal.h>
+#include <stdlib.h>
 
 SAS::TrailId FAKE_SAS_TRAIL_ID = 0x12345678;
 
@@ -222,6 +224,10 @@ public:
                                  Site::Topology("127.0.2.")
                                   .with_chronos("chronos.site2")
                                   .with_rogers("rogers.site2"));
+
+    // Add latency between sites.
+    system("sudo tcset --device eth0 --add --delay 100 --iptables --network 127.0.1.0/24 --src-network 127.0.2.0/24");
+    system("sudo tcset --device eth0 --add --delay 100 --iptables --network 127.0.2.0/24 --src-network 127.0.1.0/24");
   }
 
   static void TearDownTestCase()
@@ -229,6 +235,9 @@ public:
     _dnsmasq_instance.reset();
     _site1.reset();
     _site2.reset();
+
+    // Remove network rules.
+    system("sudo tcdel --device eth0");
 
     boost::filesystem::remove_all("tmp");
 
@@ -238,6 +247,9 @@ public:
 
   virtual void SetUp()
   {
+    _site1->restart();
+    _site2->restart();
+
     _s4_site1 = new S4Site("site1", _deployment_topology);
     _s4_site2 = new S4Site("site2", _deployment_topology);
 
@@ -308,6 +320,8 @@ public:
 
   S4Site* _s4_site1;
   S4Site* _s4_site2;
+
+  AstaireAoRStore::JsonSerializerDeserializer _serializer_deserializer;
 
   /// Use shared pointers for managing the instances so that the memory gets
   /// freed when the vector is cleared.
@@ -407,7 +421,9 @@ TEST_F(SimpleS4SolutionTest, TimerTracerBullet)
   EXPECT_EQ(aor, nullptr);
 }
 
-/// Add a key and retrieve it.
+/// Add a key in site1.
+/// Kill site1.
+/// Retrieve the key from site2.
 TEST_F(SimpleS4SolutionTest, TracerBullet)
 {
   const std::string impu = "sip:kermit@muppets.com";
@@ -437,3 +453,101 @@ TEST_F(SimpleS4SolutionTest, TracerBullet)
   delete aor; aor = nullptr;
 }
 
+/// Try to retrieve a key that doesn't exist anywhere.
+TEST_F(SimpleS4SolutionTest, KeyDoesntExist)
+{
+  const std::string impu = "sip:kermit@muppets.com";
+
+  // Get a non-existent key. This should fail with a NOT_FOUND error.
+  AoR* aor = nullptr;
+  uint64_t cas;
+  HTTPCode status = _s4_site1->s4->handle_get(impu,
+                                              &aor,
+                                              cas,
+                                              FAKE_SAS_TRAIL_ID);
+  EXPECT_EQ(status, HTTP_NOT_FOUND);
+  delete aor; aor = nullptr;
+}
+
+/// Add a key in site1.
+/// Patch the key in site1.
+/// Kill site1.
+/// Retrieve the key from site2.
+TEST_F(SimpleS4SolutionTest, UpdateBindings)
+{
+  const std::string impu = "sip:kermit@muppets.com";
+
+  // PUT a binding to site1.
+  AoR* aor = AoRTestUtils::create_simple_aor(impu);
+  _s4_site1->s4->handle_put(impu, *aor, FAKE_SAS_TRAIL_ID);
+
+  // create_simple_patch creates a patch that acts to increment the CSeq, and
+  // change the expiry of the binding and subscription. Make the corresponding
+  // changes to the AoR so that we can verify that the patch has been applied.
+  PatchObject* po = AoRTestUtils::create_simple_patch(impu);
+  aor->_notify_cseq++;
+  aor->get_binding(AoRTestUtils::BINDING_ID)->_expires += 300;
+  aor->get_subscription(AoRTestUtils::SUBSCRIPTION_ID)->_expires += 300;
+  std::string patched_aor_str = _serializer_deserializer.serialize_aor(aor);
+  delete aor; aor = nullptr;
+
+  // PATCH the binding in site1.
+  AoR* patched_aor = nullptr;
+  HTTPCode status = _s4_site1->s4->handle_patch(impu,
+                                                *po,
+                                                &patched_aor,
+                                                FAKE_SAS_TRAIL_ID);
+  EXPECT_EQ(status, HTTP_OK);
+  EXPECT_NE(patched_aor, nullptr);
+  EXPECT_EQ(_serializer_deserializer.serialize_aor(patched_aor), patched_aor_str);
+  delete po; po = nullptr;
+  delete patched_aor; patched_aor = nullptr;
+
+  // Kill site1.
+  _site1->kill();
+  delete _s4_site1; _s4_site1 = nullptr;
+
+
+  // Get from site2.
+  uint64_t cas;
+  status = _s4_site2->s4->handle_get(impu,
+                                     &aor,
+                                     cas,
+                                     FAKE_SAS_TRAIL_ID);
+  EXPECT_EQ(status, HTTP_OK);
+  EXPECT_NE(aor, nullptr);
+  // S4 should have replicated the PATCH to site2.
+  EXPECT_EQ(_serializer_deserializer.serialize_aor(aor), patched_aor_str);
+  delete aor; aor = nullptr;
+}
+
+/// Add a key in site1.
+/// Restart site1 (so that the data is lost from site1).
+/// Retrieve the key from site1 anyway!
+TEST_F(SimpleS4SolutionTest, RetrieveFromRemoteSite)
+{
+  const std::string impu = "sip:kermit@muppets.com";
+
+  // PUT a binding to site1.
+  AoR* aor = new AoR(impu);
+  Binding* b = new Binding(impu);
+  b->_expires = time(nullptr) + 3600;
+  aor->_bindings[impu] = b;
+
+  _s4_site1->s4->handle_put(impu, *aor, FAKE_SAS_TRAIL_ID);
+  delete aor; aor = nullptr;
+
+  // Restart site1. Memcached data will be lost.
+  _site1->restart();
+
+  // Get from site2. This should work as S4 has replicated the PUT to the
+  // remote site.
+  uint64_t cas;
+  HTTPCode status = _s4_site1->s4->handle_get(impu,
+                                              &aor,
+                                              cas,
+                                              FAKE_SAS_TRAIL_ID);
+  EXPECT_EQ(status, HTTP_OK);
+  EXPECT_NE(aor, nullptr);
+  delete aor; aor = nullptr;
+}
