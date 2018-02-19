@@ -30,3 +30,58 @@
    fun:netsnmp_register_handler
 }
 
+{
+   libevhtp passes a structure with an uninitialized magic number to sendto() (but doesn't then check it, so it's OK)
+   Memcheck:Param
+   socketcall.sendto(msg)
+   fun:send
+   fun:evthr_defer
+   fun:_evhtp_accept_cb
+   obj:/usr/lib/x86_64-linux-gnu/libevent-2.0.so.5.1.9
+   fun:event_base_loop
+   ...
+}
+
+{
+   libevhtp passes a structure with an uninitialized magic number to write() (but doesn't then check it, so it's OK)
+   Memcheck:Param
+   write(buf)
+   obj:/lib/x86_64-linux-gnu/libpthread-2.19.so
+   fun:evthr_stop
+   fun:evthr_pool_stop
+   fun:evhtp_free
+   ...
+}
+
+{
+   evthread_set_condition_callbacks reads from uninitialized memory
+   Memcheck:Cond
+   fun:bcmp
+   fun:evthread_set_condition_callbacks
+   fun:evthread_use_pthreads
+   ...
+}
+
+{
+   evhtp_bind_socket can leak memory. We only call this once on startup though, so this is benign
+   Memcheck:Leak
+   match-leak-kinds: definite
+   fun:calloc
+   fun:evconnlistener_new
+   fun:evconnlistener_new_bind
+   fun:evhtp_bind_sockaddr
+   fun:evhtp_bind_socket
+   ...
+}
+
+{
+   evhtp does not release connections when shutting down, but this is OK as it's only hit in termination processing.
+   Memcheck:Leak
+   match-leak-kinds: definite
+   fun:calloc
+   fun:_evhtp_connection_new
+   fun:_evhtp_accept_cb
+   obj:/usr/lib/x86_64-linux-gnu/libevent-2.0.so.5.1.9
+   fun:event_base_loop
+   ...
+}

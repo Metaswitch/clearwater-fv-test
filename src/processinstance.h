@@ -78,7 +78,9 @@ public:
                   int port,
                   const std::string& instance_dir,
                   const std::string& cluster_conf_file,
-                  const std::string& shared_conf_file);
+                  const std::string& shared_conf_file,
+                  const std::string& dns_ip,
+                  int dns_port);
   virtual ~ChronosInstance();
   bool execute_process();
 

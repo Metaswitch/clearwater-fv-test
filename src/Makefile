@@ -18,6 +18,15 @@ TARGET_TEST := fvtest
 TARGET_SOURCES_TEST := memcachedstore.cpp \
                        baseresolver.cpp \
                        astaire_resolver.cpp \
+                       a_record_resolver.cpp \
+                       accesslogger.cpp \
+                       health_checker.cpp \
+                       exception_handler.cpp \
+                       httpstack.cpp \
+                       httpconnection.cpp \
+                       http_connection_pool.cpp \
+                       httpclient.cpp \
+                       chronosconnection.cpp \
                        utils.cpp \
                        memcached_connection_pool.cpp \
                        memcachedstoreview.cpp \
@@ -49,6 +58,8 @@ TARGET_SOURCES_TEST := memcachedstore.cpp \
                        associated_uris.cpp \
                        astaire_aor_store.cpp \
                        s4.cpp \
+                       s4_handlers.cpp \
+                       s4_chronoshandlers.cpp \
                        test_main.cpp \
                        test_dns.cpp \
                        test_snmp.cpp \
@@ -78,9 +89,11 @@ EXTRA_CLEANS += $(TEST_XML) \
 CPPFLAGS += -Wno-write-strings \
             -ggdb3 -std=c++0x
 CPPFLAGS += -I${ROOT}/include \
+            -I${ROOT}/usr/include \
             -I${ASTAIRE_INCLUDES} \
             -I${ROOT}/modules/cpp-common/include \
             -I${ROOT}/modules/clearwater-s4/include \
+            -I${ROOT}/modules/clearwater-s4/test_utils \
             -I${ROOT}/modules/rapidjson/include
 
 # Add cpp-common and S4 as a VPATH to pull in required production code
@@ -99,8 +112,11 @@ CPPFLAGS_TEST  += -DUNIT_TEST \
                   -I$(GTEST_DIR)/include -I$(GMOCK_DIR)/include \
                   -I${ROOT}/modules/cpp-common/test_utils
 
-LDFLAGS += -L${ASTAIRE_LIBS}
+LDFLAGS += -L${ASTAIRE_LIBS} -L${ROOT}/usr/lib
 LDFLAGS += -lmemcached \
+           -levhtp \
+           -levent \
+           -levent_pthreads \
            -lsas \
            -lpthread \
            -lc \
@@ -108,6 +124,8 @@ LDFLAGS += -lmemcached \
            -ldl \
            -lrt \
            -lcares \
+           -lcurl \
+           -lz \
            -lboost_regex \
            -lboost_filesystem \
            -lboost_system \

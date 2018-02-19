@@ -226,7 +226,9 @@ ChronosInstance::ChronosInstance(const std::string& ip,
                                  int port,
                                  const std::string& instance_dir,
                                  const std::string& cluster_conf_file,
-                                 const std::string& shared_conf_file) :
+                                 const std::string& shared_conf_file,
+                                 const std::string& dns_ip,
+                                 int dns_port) :
   ProcessInstance(ip, port),
   _instance_dir(instance_dir),
   _log_dir(_instance_dir + "/log"),
@@ -244,6 +246,10 @@ ChronosInstance::ChronosInstance(const std::string& ip,
   config << "[logging]\n"
          << "level = " << get_log_level() << "\n"
          << "folder = " << _log_dir << "\n"
+         << "\n"
+         << "[dns]\n"
+         << "servers = " << dns_ip << "\n"
+         << "port = " << dns_port << "\n"
          << "\n"
          << "[http]\n"
          << "bind-address = " << _ip << "\n"

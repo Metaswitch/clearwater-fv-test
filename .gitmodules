@@ -16,3 +16,6 @@
 [submodule "modules/clearwater-s4"]
 	path = modules/clearwater-s4
 	url = git@github.com:Metaswitch/clearwater-s4.git
+[submodule "modules/libevhtp"]
+	path = modules/libevhtp
+	url = git@github.com:Metaswitch/libevhtp.git
