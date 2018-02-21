@@ -18,6 +18,15 @@ TARGET_TEST := fvtest
 TARGET_SOURCES_TEST := memcachedstore.cpp \
                        baseresolver.cpp \
                        astaire_resolver.cpp \
+                       a_record_resolver.cpp \
+                       accesslogger.cpp \
+                       health_checker.cpp \
+                       exception_handler.cpp \
+                       httpstack.cpp \
+                       httpconnection.cpp \
+                       http_connection_pool.cpp \
+                       httpclient.cpp \
+                       chronosconnection.cpp \
                        utils.cpp \
                        memcached_connection_pool.cpp \
                        memcachedstoreview.cpp \
@@ -39,17 +48,26 @@ TARGET_SOURCES_TEST := memcachedstore.cpp \
                        snmp_ip_time_based_counter_table.cpp \
                        snmp_time_and_string_based_event_table.cpp \
                        snmp_scalar.cpp \
+                       snmp_agent.cpp \
                        log.cpp \
                        logger.cpp \
                        fakelogger.cpp \
                        dnscachedresolver.cpp \
                        dnsparser.cpp \
+                       aor.cpp \
+                       associated_uris.cpp \
+                       astaire_aor_store.cpp \
+                       s4.cpp \
+                       s4_handlers.cpp \
+                       s4_chronoshandlers.cpp \
                        test_main.cpp \
                        test_dns.cpp \
                        test_snmp.cpp \
+                       site.cpp \
                        processinstance.cpp \
                        test_interposer.cpp \
-                       test_memcachedsolution.cpp
+                       test_memcachedsolution.cpp \
+                       test_s4solution.cpp
 
 TARGET_EXTRA_OBJS_TEST := gmock-all.o \
                           gtest-all.o
@@ -71,12 +89,15 @@ EXTRA_CLEANS += $(TEST_XML) \
 CPPFLAGS += -Wno-write-strings \
             -ggdb3 -std=c++0x
 CPPFLAGS += -I${ROOT}/include \
+            -I${ROOT}/usr/include \
             -I${ASTAIRE_INCLUDES} \
             -I${ROOT}/modules/cpp-common/include \
+            -I${ROOT}/modules/clearwater-s4/include \
+            -I${ROOT}/modules/clearwater-s4/test_utils \
             -I${ROOT}/modules/rapidjson/include
 
-# Add cpp-common/src as a VPATH to pull in required production code
-VPATH := ${ROOT}/modules/cpp-common/src ${ROOT}/modules/cpp-common/test_utils
+# Add cpp-common and S4 as a VPATH to pull in required production code
+VPATH := ${ROOT}/modules/cpp-common/src ${ROOT}/modules/cpp-common/test_utils ${ROOT}/modules/clearwater-s4/src
 
 # Test build:
 #
@@ -91,8 +112,11 @@ CPPFLAGS_TEST  += -DUNIT_TEST \
                   -I$(GTEST_DIR)/include -I$(GMOCK_DIR)/include \
                   -I${ROOT}/modules/cpp-common/test_utils
 
-LDFLAGS += -L${ASTAIRE_LIBS}
+LDFLAGS += -L${ASTAIRE_LIBS} -L${ROOT}/usr/lib
 LDFLAGS += -lmemcached \
+           -levhtp \
+           -levent \
+           -levent_pthreads \
            -lsas \
            -lpthread \
            -lc \
@@ -100,7 +124,11 @@ LDFLAGS += -lmemcached \
            -ldl \
            -lrt \
            -lcares \
+           -lcurl \
+           -lz \
            -lboost_regex \
+           -lboost_filesystem \
+           -lboost_system \
            $(shell net-snmp-config --netsnmp-agent-libs)
 
 
@@ -160,18 +188,17 @@ test: run_test vg vg-check
 # Run the test.  You can set:
 # -  JUSTTEST to specify a filter to pass to gtest.
 # -  EXTRA_TEST_ARGS to pass extra arguments to the test.
-# -  MEMCACHED_PORT to specify what port memcached should use.
 #
 # Ignore failure here; it will be detected by Jenkins.
 .PHONY: run_test
 run_test: build_test | $(TEST_OUT_DIR)
 	rm -f $(TEST_XML)
 	rm -f $(OBJ_DIR_TEST)/*.gcda
-	LD_LIBRARY_PATH=${ASTAIRE_LIBS} ./fvtest $(TARGET_BIN_TEST) $(EXTRA_TEST_ARGS) --gtest_output=xml:$(TEST_XML)
+	LD_LIBRARY_PATH=${ASTAIRE_LIBS} $(TARGET_BIN_TEST) $(EXTRA_TEST_ARGS) --gtest_output=xml:$(TEST_XML)
 
 .PHONY: debug
 debug: build_test
-	LD_LIBRARY_PATH=${ASTAIRE_LIBS} ./fvtest gdb --args $(TARGET_BIN_TEST) $(EXTRA_TEST_ARGS)
+	LD_LIBRARY_PATH=${ASTAIRE_LIBS} gdb --args $(TARGET_BIN_TEST) $(EXTRA_TEST_ARGS)
 
 # Don't run VG against death tests; they don't play nicely.
 # Be aware that running this will count towards coverage.
@@ -181,7 +208,7 @@ debug: build_test
 # test failure from Jenkins.
 .PHONY: vg
 vg: build_test | $(TEST_OUT_DIR)
-	LD_LIBRARY_PATH=${ASTAIRE_LIBS} ./fvtest valgrind --xml=yes --xml-file=$(VG_XML) $(VGFLAGS) \
+	LD_LIBRARY_PATH=${ASTAIRE_LIBS} valgrind --xml=yes --xml-file=$(VG_XML) $(VGFLAGS) \
 	  $(TARGET_BIN_TEST) --gtest_filter='-*DeathTest*' $(EXTRA_TEST_ARGS) > $(VG_OUT) 2>&1
 
 # Check whether there were any errors from valgrind. Output to screen any errors found,
@@ -202,7 +229,7 @@ vg-check: vg
 
 .PHONY: vg_raw
 vg_raw: build_test | $(TEST_OUT_DIR)
-	LD_LIBRARY_PATH=${ASTAIRE_LIBS} ./fvtest valgrind --gen-suppressions=all $(VGFLAGS) \
+	LD_LIBRARY_PATH=${ASTAIRE_LIBS} valgrind --gen-suppressions=all $(VGFLAGS) \
 	  $(TARGET_BIN_TEST) --gtest_filter='-*DeathTest*' $(EXTRA_TEST_ARGS)
 
 .PHONY: distclean

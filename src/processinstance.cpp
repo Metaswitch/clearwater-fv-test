@@ -21,6 +21,7 @@
 #include <netdb.h>
 #include <cstring>
 #include <fstream>
+#include <boost/filesystem.hpp>
 
 /// Start this instance.
 bool ProcessInstance::start_instance()
@@ -45,6 +46,7 @@ bool ProcessInstance::start_instance()
   {
     // This is the original process, so save off the new PID and return true.
     _pid = pid;
+    _running = true;
     success = true;
   }
   return success;
@@ -55,16 +57,25 @@ bool ProcessInstance::kill_instance()
 {
   int status;
 
-  if (kill(_pid, SIGTERM) == 0)
+  if (_running)
   {
-    waitpid(_pid, &status, 0);
-    return (WIFSIGNALED(status) || WIFEXITED(status));
+    if (kill(_pid, SIGTERM) == 0)
+    {
+      waitpid(_pid, &status, 0);
+      bool exited = (WIFSIGNALED(status) || WIFEXITED(status));
+      _running = !exited;
+      return exited;
+    }
+    else
+    {
+      // Failed to kill the instance.
+      perror("kill");
+      return false;
+    }
   }
   else
   {
-    // Failed to kill the instance.
-    perror("kill");
-    return false;
+    return true;
   }
 }
 
@@ -128,7 +139,7 @@ bool MemcachedInstance::execute_process()
   execlp("/usr/bin/memcached",
          "memcached",
          "-l",
-         "127.0.0.1",
+         _ip.c_str(),
          "-p",
          std::to_string(_port).c_str(),
          "-e",
@@ -169,7 +180,7 @@ bool RogersInstance::execute_process()
          "--bind-addr",
          _ip.c_str(),
          "--cluster-settings-file",
-         "./cluster_settings",
+         _cluster_settings_file.c_str(),
          "--log-level",
          get_log_level().c_str(),
          (char*)NULL);
@@ -206,6 +217,74 @@ bool DnsmasqInstance::execute_process()
          "-k", // keep in foreground
          "-C",
          _cfgfile.c_str(),
+         (char*)NULL);
+  perror("execlp");
+  return false;
+}
+
+ChronosInstance::ChronosInstance(const std::string& ip,
+                                 int port,
+                                 const std::string& instance_dir,
+                                 const std::string& cluster_conf_file,
+                                 const std::string& shared_conf_file,
+                                 const std::string& dns_ip,
+                                 int dns_port) :
+  ProcessInstance(ip, port),
+  _instance_dir(instance_dir),
+  _log_dir(_instance_dir + "/log"),
+  _conf_dir(_instance_dir + "/conf"),
+  _local_conf_file(_conf_dir + "/chronos.conf"),
+  _cluster_conf_file(cluster_conf_file),
+  _shared_conf_file(shared_conf_file)
+{
+  boost::filesystem::create_directory(_instance_dir);
+  boost::filesystem::create_directory(_log_dir);
+  boost::filesystem::create_directory(_conf_dir);
+
+  std::ofstream config;
+  config.open(_local_conf_file);
+  config << "[logging]\n"
+         << "level = " << get_log_level() << "\n"
+         << "folder = " << _log_dir << "\n"
+         << "\n"
+         << "[dns]\n"
+         << "servers = " << dns_ip << "\n"
+         << "port = " << dns_port << "\n"
+         << "\n"
+         << "[http]\n"
+         << "bind-address = " << _ip << "\n"
+         << "bind-port = " << _port << "\n"
+         << "\n"
+         << "[throttling]\n"
+         << "max_tokens = 1000\n"
+         << "\n"
+         << "[cluster]\n"
+         << "localhost = " << _ip << ":" << _port << "\n";
+
+  config.close();
+}
+
+ChronosInstance::~ChronosInstance()
+{
+  boost::filesystem::remove_all(_instance_dir);
+}
+
+bool ChronosInstance::execute_process()
+{
+  // Redirect stdout and stderr to a log file to avoid cluttering up the test
+  // output (and also so we can tell what chronos instance it came from).
+  std::string out_file = _log_dir + "/chronos_stdout.txt";
+  std::string err_file = _log_dir + "/chronos_stderr.txt";
+  freopen(out_file.c_str(), "a", stdout);
+  freopen(err_file.c_str(), "a", stderr);
+
+  // Start Chronos. execlp only returns if an error has occurred, in which case
+  // return false.
+  execlp("../modules/chronos/build/bin/chronos",
+         "chronos",
+         "--local-config-file", _local_conf_file.c_str(),
+         "--cluster-config-file", _cluster_conf_file.c_str(),
+         "--shared-config-file", _shared_conf_file.c_str(),
          (char*)NULL);
   perror("execlp");
   return false;
