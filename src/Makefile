@@ -232,8 +232,11 @@ vg-check: vg
 
 .PHONY: vg_raw
 vg_raw: build_test | $(TEST_OUT_DIR)
+	@echo "!!"
+	@echo "!! WARNING. S4 tests are currently not run under valgrind."
+	@echo "!!"
 	LD_LIBRARY_PATH=${ASTAIRE_LIBS} valgrind --gen-suppressions=all $(VGFLAGS) \
-	  $(TARGET_BIN_TEST) --gtest_filter='-*DeathTest*' $(EXTRA_TEST_ARGS)
+	  $(TARGET_BIN_TEST) --gtest_filter='-*DeathTest*:*S4*' $(EXTRA_TEST_ARGS)
 
 .PHONY: distclean
 distclean: clean
