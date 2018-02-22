@@ -18,7 +18,11 @@ On Ubuntu 14.04,
 
 2.  install the required packages
 
-        sudo apt-get install git cmake make gcc g++ bison flex libsctp-dev libgnutls-dev libgcrypt-dev libidn11-dev libtool autoconf libboost-dev libboost-test-dev automake libssl-dev libcloog-ppl1 libxml2-utils valgrind memcached snmp dnsmasq libevent-dev
+        sudo apt-get install git cmake make gcc g++ bison flex libsctp-dev libgnutls-dev libgcrypt-dev libidn11-dev libtool autoconf libboost-dev libboost-test-dev automake libssl-dev libcloog-ppl1 libxml2-utils valgrind snmp dnsmasq libevent-dev
+
+3. install the correct version of memcached
+
+    This  is versioned like `memcached_1.6.00-0clearwater0.6_amd64.deb` and can be downloaded from the Clearwater repo server (http://repo.cw-ngv.com/latest/binary/)
 
 ## Getting the Code
 
