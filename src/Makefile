@@ -53,6 +53,7 @@ TARGET_SOURCES_TEST := memcachedstore.cpp \
                        logger.cpp \
                        fakelogger.cpp \
                        dnscachedresolver.cpp \
+                       static_dns_cache.cpp \
                        dnsparser.cpp \
                        aor.cpp \
                        associated_uris.cpp \
