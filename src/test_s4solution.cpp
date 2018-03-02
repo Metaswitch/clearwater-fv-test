@@ -107,7 +107,6 @@ public:
                                                nullptr,
                                                ip_addr);
     _aor_store = new AstaireAoRStore(_store);
-
     _chronos_http_client = new HttpClient(false,
                                           _http_resolver,
                                           nullptr,
