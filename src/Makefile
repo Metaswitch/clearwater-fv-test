@@ -23,7 +23,7 @@ TARGET_SOURCES_TEST := memcachedstore.cpp \
                        health_checker.cpp \
                        exception_handler.cpp \
                        httpstack.cpp \
-                       httpconnection.cpp \
+                       http_request.cpp \
                        http_connection_pool.cpp \
                        httpclient.cpp \
                        chronosconnection.cpp \

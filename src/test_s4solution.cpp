@@ -107,11 +107,22 @@ public:
                                                nullptr,
                                                ip_addr);
     _aor_store = new AstaireAoRStore(_store);
-    _chronos_connection = new ChronosConnection(this_site.chronos_domain + ":7253",
-                                                ip_addr + ":8088",
-                                                _http_resolver,
-                                                nullptr,
-                                                ip_addr);
+    _chronos_http_client = new HttpClient(false,
+                                          _http_resolver,
+                                          nullptr,
+                                          nullptr,
+                                          SASEvent::HttpLogLevel::DETAIL,
+                                          nullptr,
+                                          false,
+                                          false,
+                                          -1,
+                                          false,
+                                          "",
+                                          ip_addr);
+    _chronos_http_connection = new HttpConnection(this_site.chronos_domain + ":7253",
+                                                  _chronos_http_client);
+    _chronos_connection = new ChronosConnection(ip_addr + ":8088",
+                                                _chronos_http_connection);
     s4 = new S4(site_name + "-local-s4",
                 _chronos_connection,
                 "/timers",
@@ -172,6 +183,8 @@ public:
     for (S4* s : _remote_s4s) { delete s; }
     delete s4; s4 = nullptr;
     delete _chronos_connection; _chronos_connection = nullptr;
+    delete _chronos_http_connection; _chronos_http_connection = nullptr;
+    delete _chronos_http_client; _chronos_http_client = nullptr;
     delete _aor_store; _aor_store = nullptr;
     delete _store; _store = nullptr;
     delete _astaire_resolver; _astaire_resolver = nullptr;
@@ -188,6 +201,8 @@ private:
 
   TopologyNeutralMemcachedStore* _store;
   AoRStore* _aor_store;
+  HttpClient* _chronos_http_client;
+  HttpConnection* _chronos_http_connection;
   ChronosConnection* _chronos_connection;
   HttpStack* _http_stack;
   HttpStackUtils::SpawningHandler<
@@ -403,8 +418,8 @@ TEST_F(SimpleS4SolutionTest, TimerTracerBullet)
 
   // Check that the binding has actually gone.
   HTTPCode status = _s4_site2->s4->handle_get(impu, &aor, cas, FAKE_SAS_TRAIL_ID);
-  EXPECT_EQ(status, HTTP_NOT_FOUND);
-  EXPECT_EQ(aor, nullptr);
+  EXPECT_EQ(HTTP_NOT_FOUND, status);
+  EXPECT_EQ(nullptr, aor);
 }
 
 /// Add a key and retrieve it.
